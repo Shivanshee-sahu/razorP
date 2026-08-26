@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 const money = (n) =>
   `₹${(n || 0).toLocaleString('en-IN')}`;
 
@@ -6,6 +8,7 @@ const readPayload = (row) => {
 };
 
 export default function ApprovalQueue({ rows = [], onDecision }) {
+  const [approvedDiscounts, setApprovedDiscounts] = useState({});
   return (
     <section id="approvals" className="approval-panel">
 
@@ -19,7 +22,7 @@ export default function ApprovalQueue({ rows = [], onDecision }) {
           <h2>Approval Queue</h2>
 
           <p className="approval-subtitle">
-            High-value growth actions waiting for authorization
+            Buyer-requested Growth add-ons and merchant commercial actions waiting for authorization
           </p>
         </div>
 
@@ -86,9 +89,7 @@ export default function ApprovalQueue({ rows = [], onDecision }) {
                       GROWTH ACTION
                     </small>
 
-                    <h3>
-                      Recommended add-ons
-                    </h3>
+                    <h3>{row.kind === 'growth_item' ? 'Growth add-on approval' : 'Merchant commercial approval'}</h3>
                   </div>
 
                 </div>
@@ -111,21 +112,20 @@ export default function ApprovalQueue({ rows = [], onDecision }) {
                 <div className="approval-description">
 
                   <p>
-                    Recommended add-ons total{' '}
+                    {row.kind === 'growth_item' ? 'Buyer requested add-on worth ' : 'Proposed discount action worth '}
                     <strong>
                       {money(row.amount)}
                     </strong>.
                   </p>
 
                   <small>
-                    This exceeds the ₹2,000 automatic
-                    approval threshold. Human authorization
-                    is required before execution.
+                    This discount must be authorized by the merchant before it is applied.
                   </small>
 
                   <div className="approval-proposal-details">
                     <strong>AI GROWTH PROPOSAL</strong>
                     <span>Current cart: {money(impact.current_subtotal)}</span>
+                    {row.kind === 'growth_item' && <label className="approval-discount">Requested: {row.buyer_requested_discount_pct || 0}% · Approve at <input type="number" min="0" max="10" value={approvedDiscounts[row.id] ?? row.buyer_requested_discount_pct ?? 0} onChange={(event) => setApprovedDiscounts((previous) => ({ ...previous, [row.id]: event.target.value }))} />%</label>}
                     {payload.addons?.map((addon) => <span key={addon.product_id}>{addon.product_name || addon.product_id} · {money(addon.price_snapshot)} x {addon.qty}<br />{addon.reasoning}</span>)}
                     <span>Projected cart: {money(impact.estimated_total_before_discount)} · Final: {money(impact.estimated_total_after_discount)}</span>
                     <span>Discount: {impact.discount_pct || payload.discount_pct || 0}% · Increase: {impact.cart_increase_pct || 0}%</span>
@@ -166,8 +166,8 @@ export default function ApprovalQueue({ rows = [], onDecision }) {
                 <button
                   type="button"
                   className="approve-button"
-                  onClick={() =>
-                    onDecision(row.id, 'approve')
+                    onClick={() =>
+                    onDecision(row.id, 'approve', row.kind === 'growth_item' ? { ...row, buyer_requested_discount_pct: Number(approvedDiscounts[row.id] ?? row.buyer_requested_discount_pct ?? 0) } : row)
                   }
                 >
                   <span>✓</span>
@@ -177,8 +177,8 @@ export default function ApprovalQueue({ rows = [], onDecision }) {
                 <button
                   type="button"
                   className="reject-button"
-                  onClick={() =>
-                    onDecision(row.id, 'reject')
+                    onClick={() =>
+                    onDecision(row.id, 'reject', row)
                   }
                 >
                   Reject

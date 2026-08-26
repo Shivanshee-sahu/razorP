@@ -24,9 +24,28 @@ CREATE TABLE IF NOT EXISTS catalog (
     image_url TEXT
 );
 CREATE TABLE IF NOT EXISTS carts (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, discount_pct REAL NOT NULL DEFAULT 0, recovery_status TEXT);
-CREATE TABLE IF NOT EXISTS cart_items (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT NOT NULL REFERENCES carts(id), product_id TEXT NOT NULL REFERENCES catalog(id), qty INTEGER NOT NULL DEFAULT 1, UNIQUE(cart_id, product_id));
+CREATE TABLE IF NOT EXISTS cart_items (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT NOT NULL REFERENCES carts(id), product_id TEXT NOT NULL REFERENCES catalog(id), qty INTEGER NOT NULL DEFAULT 1, unit_price INTEGER, UNIQUE(cart_id, product_id));
 CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT, stage TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, amount INTEGER, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS approval_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT NOT NULL, payload TEXT NOT NULL, amount INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS buyer_addon_selections (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT NOT NULL, product_id TEXT NOT NULL, qty INTEGER NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, decided_at TEXT);
+CREATE TABLE IF NOT EXISTS growth_recommendations (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS growth_approval_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cart_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    buyer_requested_discount_pct REAL NOT NULL DEFAULT 0,
+    merchant_approved_discount_pct REAL,
+    original_price INTEGER NOT NULL,
+    final_price REAL,
+    qty INTEGER NOT NULL DEFAULT 1,
+    reasoning TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    requested_at TEXT NOT NULL,
+    reviewed_at TEXT,
+    reviewed_by TEXT,
+    rejection_reason TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_growth_approval_cart_status ON growth_approval_requests(cart_id, status);
 
 CREATE TABLE IF NOT EXISTS orders (
     id TEXT PRIMARY KEY,
@@ -60,6 +79,9 @@ def connect() -> sqlite3.Connection:
 def seed() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(cart_items)").fetchall()}
+        if "unit_price" not in columns:
+            conn.execute("ALTER TABLE cart_items ADD COLUMN unit_price INTEGER")
         catalog_path = ROOT / "catalog.json"
         if catalog_path.exists():
             data = json.loads(catalog_path.read_text(encoding="utf-8"))

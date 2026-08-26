@@ -37,13 +37,21 @@ def _catalog_context(catalog: list[dict]) -> list[dict]:
     } for product in catalog]
 
 
-def _parse_content(content: str) -> AgentProposal:
+def _parse_content(content: str, cart: dict, catalog: list[dict]) -> AgentProposal:
     content = content.strip()
     if content.startswith("```"):
         content = content.split("\n", 1)[-1]
         if content.endswith("```"):
             content = content[:-3].strip()
-    return AgentProposal.model_validate(json.loads(content))
+    data = json.loads(content)
+    cart_names = ", ".join(item.get("name", "the current cart") for item in cart.get("items", []))
+    products = {_product_id(product): product for product in catalog}
+    for addon in data.get("addons", []):
+        if not addon.get("reasoning"):
+            product = products.get(addon.get("product_id"), {})
+            addon["reasoning"] = f"Complements {cart_names} with {product.get('name', 'a useful cooking accessory')} and is currently in stock."
+    data.setdefault("reasoning", f"Selected useful in-stock products that complement {cart_names}.")
+    return AgentProposal.model_validate(data)
 
 
 def _validate_proposal(proposal: AgentProposal, cart: dict, catalog: list[dict]) -> dict:
@@ -103,7 +111,7 @@ def suggest(cart: dict, catalog: list[dict]) -> tuple[dict, bool, str | None]:
                                   headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
                                   json=payload, timeout=httpx.Timeout(15.0, connect=5.0))
             response.raise_for_status()
-            validated = _validate_proposal(_parse_content(response.json()["choices"][0]["message"]["content"]), cart, catalog)
+            validated = _validate_proposal(_parse_content(response.json()["choices"][0]["message"]["content"], cart, catalog), cart, catalog)
             validated["execution_metadata"] = {"trace_id": trace_id, "provider": "groq", "model": model, "attempt": attempt + 1}
             return validated, False, None
         except httpx.TimeoutException as exc:

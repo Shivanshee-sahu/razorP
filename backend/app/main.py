@@ -84,7 +84,7 @@ def cart_data(conn, cart_id: str) -> dict:
 
     try:
         raw_items = conn.execute("""
-            SELECT ci.product_id, ci.qty, c.* 
+            SELECT ci.product_id, ci.qty, ci.unit_price, c.* 
             FROM cart_items ci 
             LEFT JOIN catalog c ON c.id = ci.product_id 
             WHERE ci.cart_id = ?
@@ -95,7 +95,7 @@ def cart_data(conn, cart_id: str) -> dict:
     items = []
     for item_row in raw_items:
         item = dict(item_row)
-        price = item.get("price")
+        price = item.get("unit_price") or item.get("price")
         if price is None:
             price = item.get("price_inr", 0)
 
@@ -214,6 +214,27 @@ class BuyerAddToCartInput(BaseModel):
     cart_id: str = "demo-cart"
     items: list[BuyerCartItemInput]
 
+class GrowthSelectionInput(BaseModel):
+    cart_id: str = "demo-cart"
+    items: list["GrowthSelectionItem"]
+
+class GrowthSelectionItem(BaseModel):
+    product_id: str
+    quantity: int = Field(default=1, ge=1, le=20)
+    requested_discount_pct: float = Field(default=0, ge=0, le=100)
+
+class GrowthApprovalRequestInput(BaseModel):
+    cart_id: str = "demo-cart"
+    product_id: str
+    qty: int = Field(default=1, ge=1, le=20)
+    requested_discount_pct: float = Field(default=0, ge=0, le=100)
+
+class MerchantApprovalInput(BaseModel):
+    approved_discount_pct: float = Field(default=0, ge=0, le=100)
+
+class MerchantRejectInput(BaseModel):
+    reason: str = Field(default="Merchant rejected this commercial request.", max_length=300)
+
 # ========================================================
 # PUBLIC & CATALOG ROUTES
 # ========================================================
@@ -253,23 +274,31 @@ def update_cart(cart_id: str, item: CartItemInput):
     with connect() as conn:
         cart_data(conn, cart_id)
         product = conn.execute(
-            "SELECT stock FROM catalog WHERE id=?", 
+            "SELECT stock, price FROM catalog WHERE id=?", 
             (item.product_id,)
         ).fetchone()
         if not product:
             raise HTTPException(404, "Product not found")
         
         prod_dict = dict(product)
+        growth_approval = conn.execute(
+            "SELECT status FROM growth_approval_requests WHERE cart_id=? AND product_id=? ORDER BY id DESC LIMIT 1",
+            (cart_id, item.product_id),
+        ).fetchone()
+        if item.qty > 0 and growth_approval and growth_approval["status"] != "APPROVED":
+            raise HTTPException(403, "Merchant approval required before this Growth add-on can be added.")
         if item.qty > prod_dict.get("stock", 0):
             raise HTTPException(400, "Requested quantity exceeds stock")
         
         if item.qty == 0:
             conn.execute("DELETE FROM cart_items WHERE cart_id=? AND product_id=?", (cart_id, item.product_id))
         else:
+            approved = conn.execute("SELECT final_price FROM growth_approval_requests WHERE cart_id=? AND product_id=? AND status='APPROVED' ORDER BY id DESC LIMIT 1", (cart_id, item.product_id)).fetchone()
+            unit_price = approved["final_price"] if approved else prod_dict["price"]
             conn.execute(
-                "INSERT INTO cart_items(cart_id,product_id,qty) VALUES (?,?,?) "
-                "ON CONFLICT(cart_id,product_id) DO UPDATE SET qty=excluded.qty",
-                (cart_id, item.product_id, item.qty)
+                "INSERT INTO cart_items(cart_id,product_id,qty,unit_price) VALUES (?,?,?,?) "
+                "ON CONFLICT(cart_id,product_id) DO UPDATE SET qty=excluded.qty, unit_price=excluded.unit_price",
+                (cart_id, item.product_id, item.qty, unit_price)
             )
         return cart_data(conn, cart_id)
 
@@ -392,22 +421,133 @@ def add_buyer_cart(payload: BuyerAddToCartInput):
             row_dict = dict(row)
             if row_dict["stock"] < qty:
                 raise HTTPException(400, f"Insufficient stock for {row_dict['name']}")
-            
-            authoritative_total += row_dict["price"] * qty
-            validated_items.append((payload.cart_id, row_dict["id"], qty))
+            approved = conn.execute("SELECT final_price FROM growth_approval_requests WHERE cart_id=? AND product_id=? AND status='APPROVED' ORDER BY id DESC LIMIT 1", (payload.cart_id, p_id)).fetchone()
+            if conn.execute("SELECT 1 FROM growth_approval_requests WHERE cart_id=? AND product_id=?", (payload.cart_id, p_id)).fetchone() and not approved:
+                raise HTTPException(403, "Merchant approval required before this add-on can be added.")
+            unit_price = approved["final_price"] if approved else row_dict["price"]
+            authoritative_total += unit_price * qty
+            validated_items.append((payload.cart_id, row_dict["id"], qty, unit_price))
 
         conn.execute(
             "INSERT INTO carts (id, created_at, discount_pct) VALUES (?, ?, 0) ON CONFLICT(id) DO NOTHING",
             (payload.cart_id, now())
         )
 
-        conn.execute("DELETE FROM cart_items WHERE cart_id = ?", (payload.cart_id,))
-        for c_id, p_id, qty in validated_items:
-            conn.execute("INSERT INTO cart_items (cart_id, product_id, qty) VALUES (?, ?, ?)", (c_id, p_id, qty))
+        for c_id, p_id, qty, unit_price in validated_items:
+            conn.execute(
+                "INSERT INTO cart_items (cart_id, product_id, qty, unit_price) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(cart_id, product_id) DO UPDATE SET qty=cart_items.qty + excluded.qty, unit_price=excluded.unit_price",
+                (c_id, p_id, qty, unit_price),
+            )
 
         log(conn, payload.cart_id, "CART", "MODIFY_CART", "AI buyer selection loaded into cart", authoritative_total)
 
-    return {"status": "success", "cart_id": payload.cart_id, "subtotal": authoritative_total}
+    with connect() as conn:
+        updated_cart = cart_data(conn, payload.cart_id)
+    return {"status": "success", "cart_id": payload.cart_id, "subtotal": updated_cart["subtotal"], "cart": updated_cart}
+
+@app.post("/api/agent/growth/select")
+def select_growth_addons(payload: GrowthSelectionInput):
+    """Buyer requests selected Growth add-ons; merchant approval is required before cart mutation."""
+    with connect() as conn:
+        cart = cart_data(conn, payload.cart_id)
+        cart_ids = {item["product_id"] for item in cart["items"]}
+        if not payload.items:
+            raise HTTPException(400, "Select at least one Growth add-on.")
+        selected = []
+        for item in payload.items:
+            if item.product_id in cart_ids:
+                raise HTTPException(400, f"{item.product_id} is already in the cart.")
+            row = conn.execute("SELECT id, name, price, stock FROM catalog WHERE id=?", (item.product_id,)).fetchone()
+            if not row:
+                raise HTTPException(400, f"Product {item.product_id} is not in the catalog.")
+            product = dict(row)
+            if item.quantity > product["stock"]:
+                raise HTTPException(400, f"Stock changed for {product['name']}; no cart changes were made.")
+            existing = conn.execute("SELECT id, status FROM growth_approval_requests WHERE cart_id=? AND product_id=? ORDER BY id DESC LIMIT 1", (payload.cart_id, item.product_id)).fetchone()
+            if existing and existing["status"] == "PENDING":
+                selected.append(existing["id"])
+                continue
+            approval_id = conn.execute("INSERT INTO growth_approval_requests(cart_id,product_id,buyer_requested_discount_pct,original_price,qty,reasoning,status,requested_at) VALUES (?,?,?,?,?,?,?,?)", (payload.cart_id, item.product_id, item.requested_discount_pct, product["price"], item.quantity, f"Complements the current cart: {', '.join(i['name'] for i in cart['items'])}.", "PENDING", now())).lastrowid
+            conn.execute("INSERT INTO buyer_addon_selections(cart_id,product_id,qty,status,created_at) VALUES (?,?,?,?,?)", (payload.cart_id, item.product_id, item.quantity, "PENDING", now()))
+            selected.append(approval_id)
+        log(conn, payload.cart_id, "BuyerApproval", "pending", "Buyer selected Growth add-ons; merchant approval is required before cart mutation.")
+        return {"status": "pending", "approval_ids": selected, "cart": cart}
+
+@app.post("/api/growth/approval/request")
+def request_growth_approval(payload: GrowthApprovalRequestInput):
+    with connect() as conn:
+        cart = cart_data(conn, payload.cart_id)
+        if payload.product_id in {item["product_id"] for item in cart["items"]}:
+            raise HTTPException(400, "Product is already in the cart.")
+        product = conn.execute("SELECT id,name,price,stock FROM catalog WHERE id=?", (payload.product_id,)).fetchone()
+        if not product or product["stock"] < payload.qty:
+            raise HTTPException(400, "Product is unavailable or stock is insufficient.")
+        existing = conn.execute("SELECT id,status FROM growth_approval_requests WHERE cart_id=? AND product_id=? ORDER BY id DESC LIMIT 1", (payload.cart_id, payload.product_id)).fetchone()
+        if existing and existing["status"] == "PENDING":
+            return {"status": "pending", "approval_id": existing["id"], "product_id": payload.product_id}
+        approval_id = conn.execute("INSERT INTO growth_approval_requests(cart_id,product_id,buyer_requested_discount_pct,original_price,qty,reasoning,status,requested_at) VALUES (?,?,?,?,?,?,?,?)", (payload.cart_id, payload.product_id, payload.requested_discount_pct, product["price"], payload.qty, f"Complements {', '.join(item['name'] for item in cart['items'])} already in the cart.", "PENDING", now())).lastrowid
+        log(conn, payload.cart_id, "Discount", "pending", f"Buyer requested {payload.requested_discount_pct:g}% discount for {product['name']}.", product["price"] * payload.qty)
+        return {"status": "pending", "approval_id": approval_id, "product_id": payload.product_id}
+
+@app.get("/api/growth/approvals/buyer/{cart_id}")
+def growth_approvals_for_buyer(cart_id: str):
+    with connect() as conn:
+        return rows(conn.execute("SELECT * FROM growth_approval_requests WHERE cart_id=? ORDER BY id DESC", (cart_id,)).fetchall())
+
+@app.get("/api/growth/approvals/merchant")
+def growth_approvals_for_merchant():
+    with connect() as conn:
+        return rows(conn.execute("SELECT * FROM growth_approval_requests WHERE status='PENDING' ORDER BY id DESC").fetchall())
+
+@app.get("/api/merchant/approvals")
+def merchant_approvals():
+    return growth_approvals_for_merchant()
+
+@app.post("/api/growth/approvals/{approval_id}/approve")
+def approve_growth_request(approval_id: int, payload: MerchantApprovalInput):
+    with connect() as conn:
+        request = conn.execute("SELECT * FROM growth_approval_requests WHERE id=?", (approval_id,)).fetchone()
+        if not request:
+            raise HTTPException(404, "Growth approval request not found.")
+        if request["status"] != "PENDING":
+            return {"status": request["status"], "approval_id": approval_id, "message": "Approval already decided; no action was executed."}
+        product = conn.execute("SELECT id,name,price,stock FROM catalog WHERE id=?", (request["product_id"],)).fetchone()
+        if not product or product["stock"] < request["qty"]:
+            conn.execute("UPDATE growth_approval_requests SET status='REJECTED', reviewed_at=?, rejection_reason=? WHERE id=?", (now(), "Product is no longer available at the requested quantity.", approval_id))
+            log(conn, request["cart_id"], "MerchantApproval", "blocked", "Growth add-on approval rejected because stock changed.", request["original_price"])
+            return {"status": "REJECTED", "approval_id": approval_id, "reason": "Product is no longer available."}
+        if payload.approved_discount_pct > POLICY_CONFIG["max_discount_pct"]:
+            raise HTTPException(400, f"Approved discount cannot exceed the {POLICY_CONFIG['max_discount_pct']:g}% policy maximum.")
+        policy = validate_discount(payload.approved_discount_pct)
+        if policy["status"] == "blocked":
+            raise HTTPException(400, policy["reason"])
+        final_price = round(product["price"] * (1 - payload.approved_discount_pct / 100), 2)
+        conn.execute("UPDATE growth_approval_requests SET merchant_approved_discount_pct=?, final_price=?, status='APPROVED', reviewed_at=?, reviewed_by=? WHERE id=?", (payload.approved_discount_pct, final_price, now(), "Merchant", approval_id))
+        conn.execute("UPDATE buyer_addon_selections SET status='ACCEPTED', decided_at=? WHERE cart_id=? AND product_id=? AND status='PENDING'", (now(), request["cart_id"], request["product_id"]))
+        log(conn, request["cart_id"], "MerchantApproval", "approved", f"Merchant approved {product['name']} at {payload.approved_discount_pct:g}% discount; buyer may add it to cart.", final_price * request["qty"])
+        return {"status": "APPROVED", "approval_id": approval_id, "product_id": request["product_id"], "final_price": final_price}
+
+@app.post("/api/growth/approvals/{approval_id}/reject")
+def reject_growth_request(approval_id: int, payload: MerchantRejectInput):
+    with connect() as conn:
+        request = conn.execute("SELECT * FROM growth_approval_requests WHERE id=?", (approval_id,)).fetchone()
+        if not request:
+            raise HTTPException(404, "Growth approval request not found.")
+        if request["status"] != "PENDING":
+            return {"status": request["status"], "approval_id": approval_id, "message": "Approval already decided; no action was executed."}
+        conn.execute("UPDATE growth_approval_requests SET status='REJECTED', reviewed_at=?, reviewed_by=?, rejection_reason=? WHERE id=?", (now(), "Merchant", payload.reason, approval_id))
+        conn.execute("UPDATE buyer_addon_selections SET status='REJECTED', decided_at=? WHERE cart_id=? AND product_id=? AND status='PENDING'", (now(), request["cart_id"], request["product_id"]))
+        log(conn, request["cart_id"], "MerchantApproval", "rejected", f"Merchant rejected Growth add-on: {payload.reason}", request["original_price"] * request["qty"])
+        return {"status": "REJECTED", "approval_id": approval_id, "reason": payload.reason}
+
+@app.post("/api/merchant/approvals/{approval_id}/approve")
+def approve_merchant_growth_request(approval_id: int, payload: MerchantApprovalInput):
+    return approve_growth_request(approval_id, payload)
+
+@app.post("/api/merchant/approvals/{approval_id}/reject")
+def reject_merchant_growth_request(approval_id: int, payload: MerchantRejectInput):
+    return reject_growth_request(approval_id, payload)
 
 # ========================================================
 # GROWTH AGENT & APPROVALS
@@ -450,7 +590,9 @@ def run_agent(body: AgentInput):
                 if len(addons) < POLICY_CONFIG["max_ai_addons"] and sum(
                     item["product"]["price"] * item["qty"] for item in addons
                 ) + line_total <= max_addon_amount:
-                    addons.append({**addon, "product": item_data})
+                    cart_names = [item["name"] for item in cart["items"]]
+                    reasoning = addon.get("reasoning") or f"Complements {', '.join(cart_names)} already in your cart."
+                    addons.append({**addon, "reasoning": reasoning, "approval_status": "NOT_REQUESTED", "based_on_cart_items": cart_names, "product": item_data})
 
         discount = validate_discount(float(proposal.get("discount_pct", 0)))
         log(conn, body.cart_id, "Validate", discount["status"], discount["reason"])
@@ -469,32 +611,68 @@ def run_agent(body: AgentInput):
                 "cart_increase_pct": round((addon_total / cart["subtotal"] * 100) if cart["subtotal"] else 0, 1),
             },
         }
-        approval_id = conn.execute(
-            "INSERT INTO approval_queue(cart_id,payload,amount,created_at) VALUES (?,?,?,?)",
-            (body.cart_id, json.dumps(payload), addon_total, now())
-        ).lastrowid
-        log(conn, body.cart_id, "Proposal", "created", "Growth Agent proposal created; awaiting human approval.", addon_total)
-        log(conn, body.cart_id, "Gate", "pending", "Human approval is required before any cart mutation.", addon_total)
-        outcome = {"status": "pending", "approval_id": approval_id}
+        approval_ids = []
+        cart_names = ", ".join(item["name"] for item in cart["items"])
+        for addon in addons:
+            existing = conn.execute(
+                "SELECT id FROM growth_approval_requests WHERE cart_id=? AND product_id=? ORDER BY id DESC LIMIT 1",
+                (body.cart_id, addon["product_id"]),
+            ).fetchone()
+            if existing:
+                approval_ids.append(existing["id"])
+                continue
+            approval_id = conn.execute(
+                "INSERT INTO growth_approval_requests(cart_id,product_id,buyer_requested_discount_pct,original_price,qty,reasoning,status,requested_at) VALUES (?,?,?,?,?,?,?,?)",
+                (body.cart_id, addon["product_id"], discount["accepted"], addon["product"]["price"], addon["qty"], addon["reasoning"] or f"Complements {cart_names} already in the cart.", "PENDING", now()),
+            ).lastrowid
+            approval_ids.append(approval_id)
+        log(conn, body.cart_id, "Proposal", "created", "Growth Agent recommendations sent for merchant approval.", addon_total)
+        outcome = {"status": "merchant_pending", "approval_ids": approval_ids}
+        conn.execute("INSERT INTO growth_recommendations(cart_id,payload,status,created_at) VALUES (?,?,?,?)", (body.cart_id, json.dumps({"addons": addons, "financial_impact": payload["financial_impact"], "reasoning": proposal.get("reasoning", "")}), "pending", now()))
             
         updated_cart = cart_data(conn, body.cart_id)
         return {
             "proposal": proposal,
             "addons": addons,
             "validator": discount,
-            "gate": gate,
+            "gate": {**gate, "status": "pending", "reason": "Merchant approval is required before approved add-ons can be added to the cart."},
             "outcome": outcome,
             "cart": updated_cart,
             "agent": {"name": "GrowthAgent", "run_id": proposal.get("execution_metadata", {}).get("trace_id"), "timestamp": now()},
             "explanation": {"summary": proposal.get("reasoning", ""), "factors": ["Catalog and stock validated", "Cart impact calculated server-side", "Policy gate evaluated"]},
             "financial_impact": payload["financial_impact"],
-            "next_action": {"type": "approval"},
+            "next_action": {"type": "merchant_approval"},
         }
+
+@app.get("/api/agent/growth/recommendations/{cart_id}")
+def growth_recommendations(cart_id: str):
+    with connect() as conn:
+        rows_ = conn.execute("SELECT * FROM growth_recommendations WHERE cart_id=? ORDER BY id DESC LIMIT 1", (cart_id,)).fetchall()
+        if not rows_:
+            return {"recommendations": [], "status": "none"}
+        latest = dict(rows_[0])
+        return {"id": latest["id"], "status": latest["status"], **json.loads(latest["payload"])}
+
+@app.get("/api/buyer/approvals/{cart_id}")
+def buyer_approvals(cart_id: str):
+    with connect() as conn:
+        return rows(conn.execute("SELECT * FROM buyer_addon_selections WHERE cart_id=? ORDER BY id DESC", (cart_id,)).fetchall())
 
 @app.get("/api/approvals")
 def approvals():
     with connect() as conn:
-        return rows(conn.execute("SELECT * FROM approval_queue WHERE status='pending' ORDER BY id DESC").fetchall())
+        legacy = rows(conn.execute("SELECT * FROM approval_queue WHERE status='pending'").fetchall())
+        growth = rows(conn.execute("SELECT * FROM growth_approval_requests WHERE status='PENDING'").fetchall())
+        for request in growth:
+            request["kind"] = "growth_item"
+            request["amount"] = request["original_price"] * request["qty"]
+            product = conn.execute("SELECT name FROM catalog WHERE id=?", (request["product_id"],)).fetchone()
+            request["payload"] = json.dumps({
+                "product_id": request["product_id"], "product_name": product["name"] if product else request["product_id"],
+                "qty": request["qty"], "reasoning": request["reasoning"],
+                "requested_discount_pct": request["buyer_requested_discount_pct"],
+            })
+        return sorted(legacy + growth, key=lambda item: item.get("id", 0), reverse=True)
 
 @app.post("/api/approvals/{approval_id}/{decision}")
 def decide_approval(approval_id: int, decision: str):

@@ -218,6 +218,8 @@ const downloadReceipt = async (orderId) => {
         policiesData,
         agentCatalogData,
         auditData,
+        growthApprovals,
+        growthRecommendationData,
       ] = await Promise.all([
         api('/api/catalog'),
         api(`/api/cart/${CART_ID}`),
@@ -227,6 +229,8 @@ const downloadReceipt = async (orderId) => {
         api('/api/policies'),
         api('/api/agent/catalog'),
         api(`/api/audit/${CART_ID}`),
+        api(`/api/growth/approvals/buyer/${CART_ID}`),
+        api(`/api/agent/growth/recommendations/${CART_ID}`),
       ]);
 
       setCatalog(
@@ -236,7 +240,21 @@ const downloadReceipt = async (orderId) => {
       );
 
       setCart(currentCart);
-      setAgent((previous) => previous ? { ...previous, cart: currentCart } : previous);
+      setAgent((previous) => {
+        const recovered = previous || (growthRecommendationData?.addons?.length ? growthRecommendationData : null);
+        if (!recovered) return previous;
+        const statuses = new Map((growthApprovals || []).map((item) => [item.product_id, item]));
+        return {
+          ...recovered,
+          cart: currentCart,
+          addons: (previous.addons || []).map((addon) => ({
+            ...addon,
+            approval_status: statuses.get(addon.product_id)?.status || addon.approval_status || 'NOT_REQUESTED',
+            approved_discount_pct: statuses.get(addon.product_id)?.merchant_approved_discount_pct,
+            final_price: statuses.get(addon.product_id)?.final_price,
+          })),
+        };
+      });
 
       setApprovals(
         Array.isArray(pendingApprovals)
@@ -363,6 +381,21 @@ const downloadReceipt = async (orderId) => {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const selectGrowthAddons = async (items) => {
+    try {
+      setError('');
+      const result = await api('/api/agent/growth/select', {
+        method: 'POST',
+        body: JSON.stringify({ cart_id: CART_ID, items: items.map((item) => ({ product_id: item.product_id, quantity: item.qty || 1, requested_discount_pct: item.requested_discount_pct || 0 })) }),
+      });
+      if (result.cart) setCart(result.cart);
+      setAgent((previous) => previous ? { ...previous, cart: result.cart, outcome: { ...(previous.outcome || {}), status: 'buyer_pending' }, addons: (previous.addons || []).map((addon) => items.some((item) => item.product_id === addon.product_id) ? { ...addon, approval_status: 'PENDING' } : addon) } : previous);
+      await refresh();
+    } catch (e) {
+      setError(e.message || 'Unable to add the selected Growth recommendations. Your cart was not changed.');
     }
   };
 
@@ -656,13 +689,19 @@ const downloadReceipt = async (orderId) => {
 
   const handleApprovalDecision = async (
     id,
-    decision
+    decision,
+    approvalRow
   ) => {
     try {
       const decisionResult = await api(
-        `/api/approvals/${id}/${decision}`,
+        approvalRow?.kind === 'growth_item'
+          ? `/api/growth/approvals/${id}/${decision}`
+          : `/api/approvals/${id}/${decision}`,
         {
           method: 'POST',
+          body: approvalRow?.kind === 'growth_item'
+            ? JSON.stringify(decision === 'approve' ? { approved_discount_pct: approvalRow.buyer_requested_discount_pct || 0 } : { reason: 'Rejected by merchant.' })
+            : undefined,
         }
       );
 
@@ -1712,6 +1751,8 @@ const viewReceipt = (orderId) => {
                   result={agent}
                   loading={loading}
                   onRun={run}
+                  onSelectAddons={selectGrowthAddons}
+                  onAddApproved={addBuyerToCart}
                 />
 
                 <AgentActivityFeed events={auditEvents} />
