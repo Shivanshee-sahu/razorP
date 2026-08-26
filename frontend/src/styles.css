@@ -4455,6 +4455,31 @@ a {
   line-height: 1.5;
 }
 
+.buyer-requirements {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 16px;
+  margin: 18px 0;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.buyer-requirements > div { display: grid; gap: 3px; margin-right: 8px; }
+.buyer-requirements > span { padding: 7px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; font-size: 12px; }
+.buyer-explanation, .buyer-excluded { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; font-size: 12px; }
+.buyer-explanation summary, .buyer-excluded summary { cursor: pointer; color: var(--text-secondary); font-weight: 700; }
+.buyer-explanation summary b { float: right; color: var(--success); }
+.buyer-factor-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin: 12px 0; }
+.buyer-factor-grid span { display: flex; justify-content: space-between; padding: 7px; background: var(--surface-muted); text-transform: capitalize; }
+.buyer-explanation ul { list-style: none; display: grid; gap: 5px; margin-bottom: 10px; }
+.buyer-explanation li { color: var(--success); }
+.buyer-explanation small { color: var(--text-muted); }
+.buyer-excluded > div { display: grid; gap: 8px; margin-top: 12px; }
+.buyer-excluded p { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); }
+.buyer-excluded p span { color: var(--error); font-size: 11px; }
+
 
 /* ============================================================
    PRODUCT GRID

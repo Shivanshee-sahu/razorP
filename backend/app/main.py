@@ -16,6 +16,7 @@ from app.db import connect, rows, seed
 from app.services.grok_client import suggest
 from app.services.razorpay_client import create_order, verify
 from app.services.validator import gate_addons, validate_discount
+from app.services.recommendation_engine import calculate_match_score, extract_requirements
 from io import BytesIO
 
 from fastapi.responses import StreamingResponse
@@ -192,6 +193,22 @@ class BuyerAddToCartInput(BaseModel):
 def root():
     return {"status": "online", "service": "Copper & Char API"}
 
+@app.get("/api/health")
+def health():
+    database_status = "ok"
+    try:
+        with connect() as conn:
+            conn.execute("SELECT 1").fetchone()
+    except Exception:
+        database_status = "unavailable"
+    return {
+        "status": "ok" if database_status == "ok" else "degraded",
+        "database": database_status,
+        "groq": "configured" if os.getenv("GROQ_API_KEY") else "fallback",
+        "razorpay": "configured" if os.getenv("RAZORPAY_KEY_ID") else "test configuration missing",
+        "policy": "active",
+    }
+
 @app.get("/api/catalog")
 def catalog():
     with connect() as conn:
@@ -249,8 +266,16 @@ def get_agent_catalog():
             "category": item.get("category") or "cookware",
             "description": item.get("description") or "Premium culinary equipment",
             "stock": item["stock"],
-            "attributes": ["durable", "heat resistant"],
-            "suitable_for": ["family cooking", "daily use"]
+            "attributes": {
+                "material": (item.get("category") or "cookware").lower(),
+                "durable": True,
+                "dishwasher_safe": False,
+                "oven_safe": True,
+                "induction_compatible": True,
+            },
+            "use_cases": ["family cooking", "daily cooking", "meal preparation"],
+            "suitable_for": ["2-4 people", "4-6 people", "family cooking"],
+            "compatibility": ["cookware", "stovetop", "daily use"],
         })
     return {"merchant": {"name": "Copper & Char", "currency": "INR"}, "products": products}
 
@@ -262,31 +287,39 @@ def process_buyer_request(payload: BuyerRequestInput):
     with connect() as conn:
         catalog_items = rows(conn.execute("SELECT * FROM catalog").fetchall())
 
-    budget_match = re.search(r'(?:₹|rs\.?|inr)?\s*([\d,]+)', payload.request, re.IGNORECASE)
-    budget = 8000
-    if budget_match:
-        try:
-            parsed = int(budget_match.group(1).replace(',', ''))
-            if parsed > 500:
-                budget = parsed
-        except ValueError:
-            pass
+    requirements = extract_requirements(payload.request)
+    budget = requirements["budget"]
 
     recommended = []
     current_subtotal = 0
+    selected_ids = set()
     for item in catalog_items:
         price = item.get("price") if item.get("price") is not None else item.get("price_inr", 0)
         stock = item.get("stock", 0)
-        if stock > 0 and (current_subtotal + price) <= budget:
+        score = calculate_match_score(item, payload.request, budget, recommended)
+        if stock > 0 and score["score"] >= 55 and item["id"] not in selected_ids and (current_subtotal + price) <= budget and len(recommended) < 3:
             recommended.append({
-                  "product_id": item["id"],
-    "name": item["name"],
-    "price": price,
-    "quantity": 1,
-    "image_url": item.get("image_url") or "",
-    "reason": "Fits family culinary needs and budget constraints."
+                "product_id": item["id"], "name": item["name"], "price": price, "quantity": 1,
+                "image_url": item.get("image_url") or "", "reason": "; ".join(score["why_recommended"]),
+                "recommendation": {"score": score["score"], "why_recommended": score["why_recommended"], "match_factors": score["factors"], "budget_impact": price, "remaining_budget": budget - current_subtotal - price},
             })
             current_subtotal += price
+            selected_ids.add(item["id"])
+
+    excluded = []
+    for item in catalog_items:
+        score = calculate_match_score(item, payload.request, budget, recommended)
+        if item["id"] in selected_ids:
+            continue
+        codes = []
+        if item.get("stock", 0) <= 0:
+            codes.append("OUT_OF_STOCK")
+        elif item.get("price", 0) + current_subtotal > budget:
+            codes.append("OVER_BUDGET")
+        elif score["score"] < 55:
+            codes.append("LOW_COMPATIBILITY")
+        if codes:
+            excluded.append({"product_id": item["id"], "name": item["name"], "reason_codes": codes})
 
     trace = [
         {"step": "Understanding requirements", "detail": f"Parsed request: '{payload.request}' → Target Budget: ₹{budget:,}", "status": "ok"},
@@ -306,6 +339,8 @@ def process_buyer_request(payload: BuyerRequestInput):
         "budget": budget,
         "remaining": max(0, budget - current_subtotal),
         "within_budget": current_subtotal <= budget,
+        "requirements": requirements,
+        "excluded_products": excluded,
         "policy_status": "APPROVED",
         "decision_trace": trace
     }

@@ -1801,6 +1801,18 @@ const viewReceipt = (orderId) => {
                     </div>
                   )}
 
+                  {buyerResult.requirements && (
+                    <div className="buyer-requirements">
+                      <div>
+                        <span className="section-kicker">BUYER REQUIREMENTS</span>
+                        <strong>{buyerResult.requirements.category}</strong>
+                      </div>
+                      {buyerResult.requirements.people && <span>People: {buyerResult.requirements.people}</span>}
+                      <span>Budget: {money(buyerResult.requirements.budget)}</span>
+                      <span>Goal: {buyerResult.requirements.use_case}</span>
+                    </div>
+                  )}
+
                   {/* ==================================================
                       PRODUCTS
                   ================================================== */}
@@ -1905,6 +1917,21 @@ const viewReceipt = (orderId) => {
 
                                 </div>
 
+                                {product.recommendation && (
+                                  <details className="buyer-explanation">
+                                    <summary>Why recommended? <b>{product.recommendation.score}% match</b></summary>
+                                    <div className="buyer-factor-grid">
+                                      {Object.entries(product.recommendation.match_factors || {}).map(([factor, value]) => (
+                                        <span key={factor}>{factor.replaceAll('_', ' ')} <b>{value}%</b></span>
+                                      ))}
+                                    </div>
+                                    <ul>
+                                      {(product.recommendation.why_recommended || []).map((reason) => <li key={reason}>✓ {reason}</li>)}
+                                    </ul>
+                                    <small>Budget impact {money(product.recommendation.budget_impact)} · Remaining {money(product.recommendation.remaining_budget)}</small>
+                                  </details>
+                                )}
+
                                 {/* ==================================================
                                     INDIVIDUAL ADD BUTTON
                                 ================================================== */}
@@ -1953,6 +1980,17 @@ const viewReceipt = (orderId) => {
 
                     </div>
 
+                  )}
+
+                  {buyerResult.excluded_products?.length > 0 && (
+                    <details className="buyer-excluded">
+                      <summary>Why were other products not selected? ({buyerResult.excluded_products.length})</summary>
+                      <div>
+                        {buyerResult.excluded_products.slice(0, 8).map((item) => (
+                          <p key={item.product_id}><strong>{item.name}</strong> <span>{item.reason_codes.join(' · ')}</span></p>
+                        ))}
+                      </div>
+                    </details>
                   )}
 
                 </section>

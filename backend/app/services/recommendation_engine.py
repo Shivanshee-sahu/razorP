@@ -58,7 +58,7 @@ def score_product(cart: dict, product: dict) -> dict:
         reasons.append("suitable for family cooking")
 
     subtotal = float(cart.get("subtotal", 0) or 0)
-    price = float(_value(product, "price", "price_inr", default=0) or 0)
+    price = _price_value(product)
     if price <= max(1000, subtotal * 0.35):
         score += 10
         reasons.append("reasonable add-on price")
@@ -74,3 +74,50 @@ def rank_products(cart: dict, catalog: list[dict], limit: int = 3) -> list[dict]
         ranked.append({"product": product, **score_product(cart, product)})
     ranked.sort(key=lambda item: (-item["score"], str(_value(item["product"], "id", "product_id"))))
     return ranked[:limit]
+
+
+def extract_requirements(request: str, previous: dict | None = None) -> dict:
+    """Extract buyer constraints deterministically; no LLM output is trusted here."""
+    requirements = dict(previous or {})
+    budget_match = re.search(r"(?:₹|rs\.?|inr)?\s*([\d,]+)\s*(?:k|thousand)?", request, re.IGNORECASE)
+    if budget_match:
+        amount = int(budget_match.group(1).replace(",", ""))
+        if re.search(r"k|thousand", budget_match.group(0), re.IGNORECASE):
+            amount *= 1000
+        if amount > 500:
+            requirements["budget"] = amount
+    people_match = re.search(r"(?:for|feed|serve)\s+(\d+)\s*(?:people|persons|members)?", request, re.IGNORECASE)
+    if people_match:
+        requirements["people"] = int(people_match.group(1))
+    lowered = request.lower()
+    if any(word in lowered for word in ("cookware", "cooking", "pan", "pot", "skillet", "wok")):
+        requirements["category"] = "cookware"
+    if any(word in lowered for word in ("durable", "heavy duty", "long lasting")):
+        requirements["durable"] = True
+    requirements.setdefault("budget", 8000)
+    requirements.setdefault("category", "cookware")
+    requirements.setdefault("use_case", "family cooking" if requirements.get("people", 0) else "daily cooking")
+    return requirements
+
+
+def calculate_match_score(product: dict, buyer_request: str, budget: int, existing_selection: list[dict] | None = None) -> dict:
+    requirements = extract_requirements(buyer_request, {"budget": budget})
+    price = _price_value(product)
+    category = str(product.get("category") or "").lower()
+    description = f"{product.get('name', '')} {product.get('description', '')}".lower()
+    budget_fit = 100 if price <= budget else max(0, round((budget / max(price, 1)) * 100))
+    use_case_match = 90 if requirements["use_case"].split()[0] in description or "cook" in description else 55
+    compatibility = 90 if requirements["category"] in {category, "cookware"} or category in {"cast iron", "stainless steel", "non-stick", "carbon steel", "dutch oven", "cookware"} else 45
+    stock = 100 if product.get("stock", 0) > 0 else 0
+    product_fit = 100 if requirements.get("durable") and any(word in description for word in ("durable", "heavy", "cast iron", "steel")) else 80
+    factors = {"budget_fit": budget_fit, "use_case_match": use_case_match, "compatibility": compatibility, "stock": stock, "product_fit": product_fit}
+    score = round(sum(factors[key] * weight for key, weight in zip(factors, (0.3, 0.3, 0.2, 0.1, 0.1))))
+    reasons = [f"Fits the requested {requirements['category']} category" if compatibility >= 80 else "Category is a partial match"]
+    if requirements.get("people"):
+        reasons.append(f"Suitable for family cooking for {requirements['people']} people")
+    reasons.extend(["Within the requested budget" if budget_fit == 100 else "Exceeds the requested budget", "Currently in stock" if stock else "Currently out of stock"])
+    return {"score": score, "factors": factors, "why_recommended": reasons}
+
+
+def _price_value(product: dict) -> float:
+    return float(product.get("price") if product.get("price") is not None else product.get("price_inr", 0))
