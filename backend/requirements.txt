@@ -4,3 +4,4 @@ razorpay
 httpx
 python-dotenv
 pydantic
+reportlab

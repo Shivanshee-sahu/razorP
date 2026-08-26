@@ -6,6 +6,8 @@ import AgentPanel from './components/AgentPanel';
 import ApprovalQueue from './components/ApprovalQueue';
 import AuditTrail from './components/AuditTrail';
 import CheckoutModal from './components/CheckoutModal';
+import AgentFlow from './components/AgentFlow';
+import AgentActivityFeed from './components/AgentActivityFeed';
 
 const CART_ID = 'demo-cart';
 
@@ -21,6 +23,23 @@ const getTotalRevenue = (revenue) => {
   );
 };
 
+const readSession = (key, fallback = null) => {
+  try {
+    const value = window.sessionStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const writeSession = (key, value) => {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Session persistence is only a UX enhancement; backend state remains authoritative.
+  }
+};
+
 export default function App() {
   // ============================================================
   // CORE STATE
@@ -28,7 +47,7 @@ export default function App() {
 
   const [catalog, setCatalog] = useState([]);
   const [cart, setCart] = useState(null);
-  const [agent, setAgent] = useState(null);
+  const [agent, setAgent] = useState(() => readSession('cc-growth-session'));
   const [approvals, setApprovals] = useState([]);
 
   // ============================================================
@@ -39,7 +58,8 @@ export default function App() {
   const [policies, setPolicies] = useState(null);
   const [revenue, setRevenue] = useState(null);
   const [orders, setOrders] = useState([]);
-  const [buyerResult, setBuyerResult] = useState(null);
+  const [buyerResult, setBuyerResult] = useState(() => readSession('cc-buyer-result'));
+  const [auditEvents, setAuditEvents] = useState([]);
 
   // ============================================================
   // UI STATE
@@ -54,7 +74,10 @@ export default function App() {
   const [dark, setDark] = useState(false);
   const [mobile, setMobile] = useState(false);
 
-  const [buyerMessage, setBuyerMessage] = useState('');
+  const [buyerMessage, setBuyerMessage] = useState(() => readSession('cc-buyer-request', ''));
+  const [experience, setExperience] = useState(() =>
+    window.localStorage.getItem('cc-experience') || 'buyer'
+  );
 
   // Products individually added from AI Buyer
   const [buyerAddedProducts, setBuyerAddedProducts] = useState({});
@@ -84,26 +107,47 @@ export default function App() {
     'audit',
   ];
 
+  const buyerPages = new Set(['buyer', 'products', 'cart', 'growth-ai', 'approvals', 'orders']);
+  const merchantPages = new Set(['dashboard', 'revenue', 'policies', 'audit']);
+
+  const pageForExperience = (page, role = experience) => {
+    if (role === 'buyer' && !buyerPages.has(page)) return 'buyer';
+    if (role === 'merchant' && !merchantPages.has(page)) return 'dashboard';
+    return page;
+  };
+
   const [activePage, setActivePage] = useState(() => {
     const hash = window.location.hash.replace('#', '');
+    const requestedPage = hash.replace(/^buyer\//, '').replace(/^merchant\//, '');
 
-    return validPages.includes(hash)
-      ? hash
-      : 'dashboard';
+    if (!validPages.includes(requestedPage)) return 'buyer';
+    if (experience === 'buyer' && !buyerPages.has(requestedPage)) return 'buyer';
+    if (experience === 'merchant' && !merchantPages.has(requestedPage)) return 'dashboard';
+    return requestedPage;
   });
 
   const navigateTo = (page) => {
-    setActivePage(page);
-    window.location.hash = page;
+    const nextPage = pageForExperience(page);
+    setActivePage(nextPage);
+    window.location.hash = `${experience}/${nextPage}`;
     setMobile(false);
+  };
+
+  const switchExperience = (role) => {
+    setExperience(role);
+    window.localStorage.setItem('cc-experience', role);
+    const nextPage = role === 'buyer' ? 'buyer' : 'dashboard';
+    setActivePage(nextPage);
+    window.location.hash = `${role}/${nextPage}`;
   };
 
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
+      const page = hash.replace(/^buyer\//, '').replace(/^merchant\//, '');
 
-      if (validPages.includes(hash)) {
-        setActivePage(hash);
+      if (validPages.includes(page)) {
+        setActivePage(pageForExperience(page));
       }
     };
 
@@ -119,6 +163,18 @@ export default function App() {
       );
     };
   }, []);
+
+  useEffect(() => {
+    writeSession('cc-buyer-request', buyerMessage);
+  }, [buyerMessage]);
+
+  useEffect(() => {
+    writeSession('cc-buyer-result', buyerResult);
+  }, [buyerResult]);
+
+  useEffect(() => {
+    writeSession('cc-growth-session', agent);
+  }, [agent]);
 
   // ============================================================
   // LOAD ALL BACKEND DATA
@@ -161,6 +217,7 @@ const downloadReceipt = async (orderId) => {
         ordersData,
         policiesData,
         agentCatalogData,
+        auditData,
       ] = await Promise.all([
         api('/api/catalog'),
         api(`/api/cart/${CART_ID}`),
@@ -169,6 +226,7 @@ const downloadReceipt = async (orderId) => {
         api('/api/orders'),
         api('/api/policies'),
         api('/api/agent/catalog'),
+        api(`/api/audit/${CART_ID}`),
       ]);
 
       setCatalog(
@@ -178,6 +236,7 @@ const downloadReceipt = async (orderId) => {
       );
 
       setCart(currentCart);
+      setAgent((previous) => previous ? { ...previous, cart: currentCart } : previous);
 
       setApprovals(
         Array.isArray(pendingApprovals)
@@ -201,6 +260,8 @@ const downloadReceipt = async (orderId) => {
           : agentCatalogData?.products || []
       );
 
+      setAuditEvents(Array.isArray(auditData) ? auditData : []);
+
       setError('');
     } catch (e) {
       console.error(
@@ -214,6 +275,12 @@ const downloadReceipt = async (orderId) => {
       );
     }
   };
+
+  useEffect(() => {
+    if (['cart', 'products', 'growth-ai', 'approvals', 'orders'].includes(activePage)) {
+      refresh();
+    }
+  }, [activePage]);
 
   useEffect(() => {
     refresh();
@@ -279,6 +346,9 @@ const downloadReceipt = async (orderId) => {
       );
 
       setAgent(result);
+      if (result.cart) {
+        setCart(result.cart);
+      }
 
       await refresh();
     } catch (e) {
@@ -589,12 +659,16 @@ const downloadReceipt = async (orderId) => {
     decision
   ) => {
     try {
-      await api(
+      const decisionResult = await api(
         `/api/approvals/${id}/${decision}`,
         {
           method: 'POST',
         }
       );
+
+      if (decisionResult.cart) {
+        setCart(decisionResult.cart);
+      }
 
       await refresh();
 
@@ -611,6 +685,10 @@ const downloadReceipt = async (orderId) => {
               decision === 'approve'
                 ? 'approved'
                 : 'rejected',
+          },
+          outcome: {
+            ...(previous.outcome || {}),
+            status: decision === 'approve' ? 'executed' : 'rejected',
           },
         };
       });
@@ -828,6 +906,10 @@ const viewReceipt = (orderId) => {
     },
   ];
 
+  const visibleNavItems = navItems.filter((item) =>
+    experience === 'buyer' ? buyerPages.has(item.key) : merchantPages.has(item.key)
+  );
+
   // ============================================================
   // RENDER
   // ============================================================
@@ -863,9 +945,14 @@ const viewReceipt = (orderId) => {
         </button>
 
         <nav>
-          {navItems.map((item) => (
+          <div className="experience-switcher" role="group" aria-label="Experience">
+            <button className={experience === 'buyer' ? 'active' : ''} onClick={() => switchExperience('buyer')}>Buyer View</button>
+            <button className={experience === 'merchant' ? 'active' : ''} onClick={() => switchExperience('merchant')}>Merchant View</button>
+          </div>
+          <p className="nav-context">{experience === 'buyer' ? 'SHOPPING EXPERIENCE' : 'MERCHANT CONSOLE'}</p>
+          {visibleNavItems.map((item) => (
             <a
-              href={`#${item.key}`}
+              href={`#${experience}/${item.key}`}
               key={item.key}
               className={
                 activePage === item.key
@@ -1619,11 +1706,15 @@ const viewReceipt = (orderId) => {
 
               <section className="growth-page-container">
 
+                <AgentFlow mode="merchant" current={agent ? (agent.outcome?.status === 'pending' ? 2 : 4) : 0} />
+
                 <AgentPanel
                   result={agent}
                   loading={loading}
                   onRun={run}
                 />
+
+                <AgentActivityFeed events={auditEvents} />
 
                 <div className="growth-footer-link">
 
@@ -1651,6 +1742,8 @@ const viewReceipt = (orderId) => {
 
           {activePage === 'buyer' && (
             <div className="page-view buyer-view">
+
+              <AgentFlow mode="buyer" current={buyerResult ? (cart?.items?.length ? 3 : 2) : 0} />
 
               {/* ==================================================
                   BUYER REQUEST
@@ -1995,6 +2088,8 @@ const viewReceipt = (orderId) => {
 
                 </section>
               )}
+
+              <AgentActivityFeed events={auditEvents} />
 
               {/* ==================================================
                   AGENT CATALOG

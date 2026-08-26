@@ -4685,6 +4685,37 @@ a {
   font-size: 12px;
 }
 
+.experience-switcher { display: flex; gap: 4px; margin: 0 8px 16px; padding: 4px; background: rgba(255,255,255,.06); border-radius: 8px; }
+.experience-switcher button { flex: 1; border: 0; border-radius: 6px; padding: 8px 5px; background: transparent; color: var(--sidebar-text); font-size: 11px; font-weight: 700; }
+.experience-switcher button.active { background: var(--primary); color: #fff; }
+.nav-context { margin: 0 10px 8px; color: var(--sidebar-active); font-size: 9px; letter-spacing: .12em; font-weight: 700; }
+.agent-flow { padding: 14px 18px; margin-bottom: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.agent-flow-label { color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .12em; margin-bottom: 12px; }
+.agent-flow-steps { display: flex; align-items: center; gap: 8px; overflow-x: auto; }
+.agent-flow-step { display: flex; align-items: center; gap: 6px; color: var(--text-muted); white-space: nowrap; font-size: 11px; }
+.agent-flow-step span { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; font-size: 10px; }
+.agent-flow-step.complete { color: var(--text); }
+.agent-flow-step.complete span { background: var(--success); border-color: var(--success); color: #fff; }
+.agent-flow-step i { color: var(--text-muted); font-style: normal; margin-left: 3px; }
+.activity-feed { margin-top: 18px; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.activity-empty { color: var(--text-muted); font-size: 13px; margin-top: 12px; }
+.activity-list { display: grid; gap: 12px; margin-top: 14px; }
+.activity-event { display: grid; grid-template-columns: 9px 1fr auto; gap: 10px; align-items: start; }
+.activity-dot { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--primary); }
+.activity-event strong { font-size: 12px; }
+.activity-event p { margin-top: 3px; color: var(--text-secondary); font-size: 11px; line-height: 1.4; }
+.activity-event time { color: var(--text-muted); font-size: 10px; }
+.growth-opportunity-card { display: flex; justify-content: space-between; gap: 18px; align-items: center; margin: 18px 0; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-muted); }
+.growth-opportunity-card h3 { margin: 6px 0 4px; font-size: 17px; }
+.growth-opportunity-card p { color: var(--text-secondary); font-size: 12px; }
+.opportunity-status { padding: 8px 10px; border-radius: 6px; color: var(--success); background: var(--success-light); font-size: 10px; font-weight: 700; white-space: nowrap; }
+.opportunity-status.pending { color: var(--warning); background: var(--warning-light); }
+
+@media (max-width: 650px) {
+  .growth-opportunity-card { align-items: flex-start; flex-direction: column; }
+  .agent-flow-step i { display: none; }
+}
+
 
 /* ============================================================
    RESPONSIVE

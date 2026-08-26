@@ -11,8 +11,10 @@ export default function AgentPanel({ result, loading, onRun }) {
 
   // Memoize total calculation
   const totalAddonValue = useMemo(() => {
-    return result?.addons?.reduce((sum, item) => sum + (item.product?.price || 0), 0) || 0;
+    return result?.addons?.reduce((sum, item) => sum + ((item.product?.price || 0) * (item.qty || 1)), 0) || 0;
   }, [result?.addons]);
+  const currentCartValue = Number(result?.cart?.subtotal || 0);
+  const cartIncrease = currentCartValue ? (totalAddonValue / currentCartValue) * 100 : 0;
 
   // Status helper mapping
   const bannerStatusClass = pending ? 'pending' : rejected ? 'rejected' : 'approved';
@@ -130,6 +132,17 @@ export default function AgentPanel({ result, loading, onRun }) {
     </small>
   )}
 </div>
+
+          <div className="growth-opportunity-card">
+            <div>
+              <span className="card-label">REVENUE OPPORTUNITY</span>
+              <h3>{money(totalAddonValue)} potential add-on value</h3>
+              <p>Current cart {money(currentCartValue)} · Potential increase {cartIncrease.toFixed(1)}%</p>
+            </div>
+            <div className={`opportunity-status ${pending ? 'pending' : 'approved'}`}>
+              {pending ? 'HUMAN APPROVAL REQUIRED' : 'WITHIN AUTO-ACTION LIMIT'}
+            </div>
+          </div>
 
           {/* Recommendations */}
           <div className="agent-section">

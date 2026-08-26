@@ -443,7 +443,18 @@ def run_agent(body: AgentInput):
             log(conn, body.cart_id, "Execute", "executed", "Applied approved add-ons and discount to the cart.", addon_total)
             outcome = {"status": "executed"}
             
-        return {"proposal": proposal, "addons": addons, "validator": discount, "gate": gate, "outcome": outcome, "cart": cart_data(conn, body.cart_id)}
+        updated_cart = cart_data(conn, body.cart_id)
+        return {
+            "proposal": proposal,
+            "addons": addons,
+            "validator": discount,
+            "gate": gate,
+            "outcome": outcome,
+            "cart": updated_cart,
+            "agent": {"name": "GrowthAgent", "run_id": proposal.get("execution_metadata", {}).get("trace_id"), "timestamp": now()},
+            "explanation": {"summary": proposal.get("reasoning", ""), "factors": ["Catalog and stock validated", "Cart impact calculated server-side", "Policy gate evaluated"]},
+            "next_action": {"type": "approval" if outcome["status"] == "pending" else "checkout"},
+        }
 
 @app.get("/api/approvals")
 def approvals():
@@ -485,20 +496,36 @@ def get_revenue():
     with connect() as conn:
         try:
             paid_orders = rows(conn.execute("SELECT * FROM orders WHERE status = 'PAID'").fetchall())
+            all_orders = rows(conn.execute("SELECT * FROM orders").fetchall())
+            growth_runs = conn.execute("SELECT COUNT(*) AS count FROM audit_log WHERE stage = 'Analyze'").fetchone()["count"]
+            proposals = conn.execute("SELECT COUNT(*) AS count FROM audit_log WHERE stage = 'Suggest'").fetchone()["count"]
+            accepted = conn.execute("SELECT COUNT(*) AS count FROM audit_log WHERE stage = 'Execute' AND kind = 'executed'").fetchone()["count"]
+            approvals = conn.execute("SELECT COUNT(*) AS count FROM approval_queue").fetchone()["count"]
+            approved_actions = conn.execute("SELECT COUNT(*) AS count FROM approval_queue WHERE status = 'approved'").fetchone()["count"]
+            fallback_runs = conn.execute("SELECT COUNT(*) AS count FROM audit_log WHERE detail LIKE '%Fallback%'").fetchone()["count"]
         except Exception:
-            paid_orders = []
+            paid_orders = all_orders = []
+            growth_runs = proposals = accepted = approvals = approved_actions = fallback_runs = 0
 
     total_revenue = sum(o["amount"] for o in paid_orders)
     ai_revenue = sum(o["amount"] for o in paid_orders if o.get("ai_assisted"))
-    count = max(1, len(paid_orders))
+    count = len(paid_orders)
+    total_attempts = len(all_orders)
 
     return {
         "total_test_revenue": total_revenue,
         "ai_assisted_revenue": ai_revenue,
         "ai_revenue_contribution_pct": round((ai_revenue / total_revenue * 100) if total_revenue > 0 else 0, 1),
-        "average_order_value": round(total_revenue / count),
-        "upsell_acceptance_pct": 63.0,
-        "payment_recovery_pct": 41.0
+        "average_order_value": round(total_revenue / count) if count else 0,
+        "growth_agent_runs": growth_runs,
+        "recommendations_generated": proposals,
+        "addons_accepted": accepted,
+        "upsell_acceptance_pct": round(accepted / proposals * 100, 1) if proposals else None,
+        "human_approval_rate": round(approved_actions / approvals * 100, 1) if approvals else None,
+        "auto_execution_rate": round(max(0, accepted - approved_actions) / accepted * 100, 1) if accepted else None,
+        "fallback_rate": round(fallback_runs / growth_runs * 100, 1) if growth_runs else None,
+        "payment_success_rate": round(count / total_attempts * 100, 1) if total_attempts else None,
+        "payment_recovery_pct": None,
     }
 
 @app.get("/api/orders")
