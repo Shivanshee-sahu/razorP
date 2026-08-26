@@ -1,0 +1,188 @@
+{
+  "merchant_id": "copper_char_001",
+  "merchant_name": "Copper & Char",
+  "merchant_description": "A fictional direct-to-consumer cookware studio for home cooks.",
+  "currency": "INR",
+  "catalog": [
+    {
+      "product_id": "cc_101",
+      "name": "Seasoned Cast-Iron Skillet — 10 inch",
+      "price_inr": 2499,
+      "category": "Cast Iron",
+      "stock": 18,
+      "description": "Pre-seasoned everyday skillet for searing, roasting and everyday cooking.",
+      "image_url": "https://i5.walmartimages.com/seo/TINANA-10-inch-Pre-Seasoned-Cast-Iron-Skillet-with-Handle-and-Dual-Use-Insulating-Pad_0527f058-5eb2-4e4c-ab6b-08e834db5421.f13bb6a964db9e2f9c171915c44743c1.jpeg"
+    },
+    {
+      "product_id": "cc_102",
+      "name": "Tri-Ply Stainless Steel Saucepan — 1.5 L",
+      "price_inr": 1899,
+      "category": "Stainless Steel",
+      "stock": 24,
+      "description": "Quick-heating saucepan ideal for sauces, soups and small-batch cooking.",
+      "image_url": "https://m.media-amazon.com/images/I/61DwxNLUxHL._AC_SL1500_.jpg"
+    },
+    {
+      "product_id": "cc_103",
+      "name": "Enameled Dutch Oven — 5.5 L",
+      "price_inr": 4299,
+      "category": "Dutch Oven",
+      "stock": 12,
+      "description": "Heavy-duty enameled pot for slow cooking, braising and baking.",
+      "image_url": "https://i5.walmartimages.com/seo/Martha-Stewart-Collection-Enameled-Cast-Iron-Round-6-Qt-Dutch-Oven-Black_2d122bd6-8a47-4a04-a1f4-bb6944eb2fbd.6fc45987e474b5bb4296adc1d72ddf47.jpeg?odnHeight=580&odnWidth=580&odnBg=FFFFFF"
+    },
+    {
+      "product_id": "cc_104",
+      "name": "Non-Stick Fry Pan — 28 cm",
+      "price_inr": 1599,
+      "category": "Non-Stick",
+      "stock": 30,
+      "description": "Easy-release fry pan designed for low-oil everyday cooking.",
+      "image_url": "https://www.linenchest.com/media/catalog/product/cache/aa5994821b2f2d8394f708449f6ae92d/m/e/meyer_272514_3518-28-00.jpg"
+    },
+    {
+      "product_id": "cc_105",
+      "name": "Carbon Steel Wok — 30 cm",
+      "price_inr": 2199,
+      "category": "Carbon Steel",
+      "stock": 16,
+      "description": "High-heat carbon steel wok for stir-frying, sautéing and searing.",
+      "image_url": "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      "product_id": "cc_106",
+      "name": "Acacia Wood Utensil Set",
+      "price_inr": 899,
+      "category": "Kitchen Tools",
+      "stock": 35,
+      "description": "Three durable acacia wood utensils for everyday cooking.",
+      "image_url": "https://assets.wfcdn.com/im/83738251/compr-r85/3144/314424665/15-Piece+Kitchen+Utensils+Set%2CWooden+Utensils.jpg"
+    },
+    {
+      "product_id": "cc_107",
+      "name": "Bamboo Cutting Board — Large",
+      "price_inr": 1299,
+      "category": "Kitchen Tools",
+      "stock": 28,
+      "description": "Large natural bamboo board with a spacious cutting surface.",
+      "image_url": "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      "product_id": "cc_108",
+      "name": "Stainless Steel Mixing Bowl Set",
+      "price_inr": 1199,
+      "category": "Kitchen Tools",
+      "stock": 22,
+      "description": "Set of durable nesting bowls for mixing, prep and serving.",
+      "image_url": "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      "product_id": "cc_109",
+      "name": "Cast-Iron Grill Pan — 26 cm",
+      "price_inr": 2799,
+      "category": "Cast Iron",
+      "stock": 14,
+      "description": "Ridged cast-iron grill pan for steaks, vegetables and sandwiches.",
+      "image_url": "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      "product_id": "cc_110",
+      "name": "Stainless Steel Stock Pot — 6 L",
+      "price_inr": 2499,
+      "category": "Stainless Steel",
+      "stock": 19,
+      "description": "Large stainless steel pot for pasta, soups, stocks and family meals.",
+      "image_url": "https://images.unsplash.com/photo-1572453800999-e8d2d1589b7c?auto=format&fit=crop&w=500&q=80"
+    },
+    {
+      "product_id": "cc_111",
+      "name": "Ceramic Baking Dish — 2.5 L",
+      "price_inr": 1399,
+      "category": "Bakeware",
+      "stock": 20,
+      "description": "Oven-safe ceramic dish for casseroles, gratins and baked desserts.",
+      "image_url": "https://m.media-amazon.com/images/I/81X2nybUcvL._AC_SL1500_.jpg"
+    },
+    {
+      "product_id": "cc_112",
+      "name": "Digital Kitchen Scale",
+      "price_inr": 799,
+      "category": "Kitchen Tools",
+      "stock": 40,
+      "description": "Compact digital scale for accurate cooking and baking measurements.",
+      "image_url": "https://m.media-amazon.com/images/I/71v7jWjlpeL._SL1500_.jpg"
+    },
+     {
+    "product_id": "cc_113",
+    "name": "Cast-Iron Grill Press",
+    "price_inr": 999,
+    "category": "Cast Iron",
+    "stock": 25,
+    "description": "Heavy cast-iron press for evenly searing sandwiches, burgers and grilled meats.",
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=500&q=80"
+  },
+  {
+    "product_id": "cc_114",
+    "name": "Hard-Anodized Kadai — 2.5 L",
+    "price_inr": 1799,
+    "category": "Cookware",
+    "stock": 21,
+    "description": "Durable hard-anodized kadai designed for frying, sautéing and everyday Indian cooking.",
+    "image_url": "https://images.unsplash.com/photo-1585515320310-259814833e62?auto=format&fit=crop&w=500&q=80"
+  },
+  {
+    "product_id": "cc_115",
+    "name": "Bamboo Cooking Spoon Set",
+    "price_inr": 699,
+    "category": "Kitchen Tools",
+    "stock": 38,
+    "description": "Set of five lightweight bamboo spoons and spatulas for everyday cooking.",
+    "image_url": "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=500&q=80"
+  },
+  {
+    "product_id": "cc_116",
+    "name": "Stainless Steel Colander — 24 cm",
+    "price_inr": 849,
+    "category": "Kitchen Tools",
+    "stock": 27,
+    "description": "Perforated stainless steel colander for washing, draining and serving pasta and vegetables.",
+    "image_url": "https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?auto=format&fit=crop&w=500&q=80"
+  },
+  {
+    "product_id": "cc_117",
+    "name": "Stoneware Ramekin Set — 4 Piece",
+    "price_inr": 1099,
+    "category": "Bakeware",
+    "stock": 18,
+    "description": "Four oven-safe stoneware ramekins for desserts, sauces, soufflés and individual bakes.",
+    "image_url": "https://images.unsplash.com/photo-1576618148400-f54bed99fcfd?auto=format&fit=crop&w=500&q=80"
+  },
+  {
+    "product_id": "cc_118",
+    "name": "Glass Meal Prep Container Set",
+    "price_inr": 1499,
+    "category": "Kitchen Storage",
+    "stock": 26,
+    "description": "Set of reusable glass containers with secure lids for meal preparation and food storage.",
+    "image_url": "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=500&q=80"
+  },
+  {
+    "product_id": "cc_119",
+    "name": "Silicone Spatula & Turner Set",
+    "price_inr": 799,
+    "category": "Kitchen Tools",
+    "stock": 32,
+    "description": "Heat-resistant silicone spatula and turner set designed for non-stick cookware.",
+    "image_url": "https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=500&q=80"
+  },
+  {
+    "product_id": "cc_120",
+    "name": "Electric Milk Frother",
+    "price_inr": 1299,
+    "category": "Kitchen Tools",
+    "stock": 20,
+    "description": "Compact handheld frother for preparing creamy coffee, cappuccino and hot chocolate.",
+    "image_url": "https://images.unsplash.com/photo-1517256064527-09c73fc73e38?auto=format&fit=crop&w=500&q=80"
+  }
+  ]
+}

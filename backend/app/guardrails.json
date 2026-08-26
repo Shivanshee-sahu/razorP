@@ -1,0 +1,10 @@
+{
+  "max_discount_pct": 15,
+  "max_auto_approve_amount": 2000,
+  "allowed_actions": [
+    "suggest_addon",
+    "apply_discount",
+    "create_order"
+  ],
+  "requires_human_approval_above": 2000
+}
