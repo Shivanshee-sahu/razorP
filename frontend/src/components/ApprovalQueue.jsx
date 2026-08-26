@@ -1,6 +1,10 @@
 const money = (n) =>
   `₹${(n || 0).toLocaleString('en-IN')}`;
 
+const readPayload = (row) => {
+  try { return JSON.parse(row.payload || '{}'); } catch { return {}; }
+};
+
 export default function ApprovalQueue({ rows = [], onDecision }) {
   return (
     <section id="approvals" className="approval-panel">
@@ -58,6 +62,11 @@ export default function ApprovalQueue({ rows = [], onDecision }) {
 
           {rows.map((row) => (
 
+            (() => {
+              const payload = readPayload(row);
+              const impact = payload.financial_impact || {};
+              return (
+
             <article
               className="approval-item"
               key={row.id}
@@ -113,6 +122,14 @@ export default function ApprovalQueue({ rows = [], onDecision }) {
                     approval threshold. Human authorization
                     is required before execution.
                   </small>
+
+                  <div className="approval-proposal-details">
+                    <strong>AI GROWTH PROPOSAL</strong>
+                    <span>Current cart: {money(impact.current_subtotal)}</span>
+                    {payload.addons?.map((addon) => <span key={addon.product_id}>{addon.product_name || addon.product_id} · {money(addon.price_snapshot)} x {addon.qty}<br />{addon.reasoning}</span>)}
+                    <span>Projected cart: {money(impact.estimated_total_before_discount)} · Final: {money(impact.estimated_total_after_discount)}</span>
+                    <span>Discount: {impact.discount_pct || payload.discount_pct || 0}% · Increase: {impact.cart_increase_pct || 0}%</span>
+                  </div>
 
                 </div>
 
@@ -170,6 +187,9 @@ export default function ApprovalQueue({ rows = [], onDecision }) {
               </footer>
 
             </article>
+
+              );
+            })()
 
           ))}
 

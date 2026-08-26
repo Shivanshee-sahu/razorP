@@ -4710,10 +4710,33 @@ a {
 .growth-opportunity-card p { color: var(--text-secondary); font-size: 12px; }
 .opportunity-status { padding: 8px 10px; border-radius: 6px; color: var(--success); background: var(--success-light); font-size: 10px; font-weight: 700; white-space: nowrap; }
 .opportunity-status.pending { color: var(--warning); background: var(--warning-light); }
+.recommendation-reason { margin-top: 8px; font-size: 11px; }
+.recommendation-reason summary { cursor: pointer; color: var(--primary-hover); font-weight: 700; }
+.recommendation-reason p { margin: 7px 0; color: var(--text-secondary); line-height: 1.45; }
+.recommendation-reason ul { list-style: none; display: grid; gap: 3px; color: var(--success); }
+.approval-proposal-details { display: grid; gap: 5px; margin-top: 12px; padding: 10px; background: var(--surface-muted); border-radius: 6px; font-size: 11px; line-height: 1.4; }
+.approval-proposal-details strong { color: var(--text); font-size: 10px; letter-spacing: .08em; }
+.approval-proposal-details span { color: var(--text-secondary); }
+.approval-status-banner { display: grid; gap: 4px; padding: 12px 14px; margin-bottom: 14px; border-radius: 7px; background: var(--warning-light); color: var(--warning); }
+.approval-status-banner span { font-size: 12px; color: var(--text-secondary); }
+.approval-status-banner.approved { background: var(--success-light); color: var(--success); }
+.approval-status-banner.rejected, .approval-status-banner.stale, .approval-status-banner.failed { background: var(--error-light); color: var(--error); }
+.growth-proposal { padding: 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.proposal-financials { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.proposal-financials div { display: grid; gap: 5px; padding: 10px; background: var(--surface-muted); }
+.proposal-financials span { color: var(--text-muted); font-size: 9px; font-weight: 700; }
+.proposal-financials strong { font-size: 14px; }
+.proposal-addons { display: grid; gap: 8px; margin-top: 12px; }
+.proposal-addons article { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.proposal-addons article > span { margin-left: 10px; color: var(--text-secondary); font-size: 12px; }
+.growth-proposal footer { display: flex; gap: 8px; margin-top: 14px; }
+.growth-proposal footer button { padding: 9px 12px; border: 0; border-radius: 6px; background: var(--primary); color: #fff; font-weight: 700; }
+.growth-proposal footer button:last-child { background: var(--error-light); color: var(--error); }
 
 @media (max-width: 650px) {
   .growth-opportunity-card { align-items: flex-start; flex-direction: column; }
   .agent-flow-step i { display: none; }
+  .proposal-financials { grid-template-columns: repeat(2, 1fr); }
 }
 
 

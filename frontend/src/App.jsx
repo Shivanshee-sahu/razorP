@@ -107,8 +107,8 @@ export default function App() {
     'audit',
   ];
 
-  const buyerPages = new Set(['buyer', 'products', 'cart', 'growth-ai', 'approvals', 'orders']);
-  const merchantPages = new Set(['dashboard', 'revenue', 'policies', 'audit']);
+  const buyerPages = new Set(['buyer', 'products', 'cart', 'growth-ai', 'orders']);
+  const merchantPages = new Set(['dashboard', 'products', 'approvals', 'orders', 'revenue', 'policies', 'audit']);
 
   const pageForExperience = (page, role = experience) => {
     if (role === 'buyer' && !buyerPages.has(page)) return 'buyer';

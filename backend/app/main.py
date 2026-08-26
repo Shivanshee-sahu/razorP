@@ -129,6 +129,35 @@ def apply_action(conn, cart_id: str, payload: dict) -> None:
         )
     conn.execute("UPDATE carts SET discount_pct=? WHERE id=?", (payload.get("discount_pct", 0), cart_id))
 
+
+def validate_approval_payload(conn, cart_id: str, payload: dict) -> tuple[bool, str, dict]:
+    """Revalidate a queued proposal against current DB state before execution."""
+    cart = cart_data(conn, cart_id)
+    if not cart["items"]:
+        return False, "Cart is empty; queued action cannot be applied.", cart
+    if payload.get("current_subtotal") is not None and round(float(payload["current_subtotal"]), 2) != round(float(cart["subtotal"]), 2):
+        return False, "Cart changed after this proposal was created. Please run Growth AI again.", cart
+    if len(payload.get("addons", [])) > POLICY_CONFIG["max_ai_addons"]:
+        return False, "Proposal exceeds the maximum addon count.", cart
+    cart_ids = {item["product_id"] for item in cart["items"]}
+    catalog = {row["id"]: dict(row) for row in conn.execute("SELECT * FROM catalog").fetchall()}
+    addon_total = 0
+    for addon in payload.get("addons", []):
+        product = catalog.get(addon.get("product_id"))
+        qty = addon.get("qty")
+        if not product or product["id"] in cart_ids:
+            return False, f"Product {addon.get('product_id')} is unavailable or already in the cart.", cart
+        if not isinstance(qty, int) or qty < 1 or qty > min(20, product["stock"]):
+            return False, f"Stock or quantity changed for {product['name']}.", cart
+        addon_total += product["price"] * qty
+    max_amount = max(2000, cart["subtotal"] * POLICY_CONFIG["max_cart_increase_pct"] / 100)
+    if addon_total > max_amount:
+        return False, "Proposal exceeds the maximum cart increase policy.", cart
+    discount = validate_discount(float(payload.get("discount_pct", 0)))
+    if discount["status"] == "blocked":
+        return False, discount["reason"], cart
+    return True, "Queued proposal revalidated successfully.", cart
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     seed()
@@ -428,20 +457,25 @@ def run_agent(body: AgentInput):
         
         addon_total = sum(addon["product"]["price"] * addon["qty"] for addon in addons)
         gate = gate_addons(addon_total)
-        payload = {"addons": [{"product_id": a["product_id"], "qty": a["qty"]} for a in addons], "discount_pct": discount["accepted"]}
-        
-        if gate["status"] == "pending":
-            approval_id = conn.execute(
-                "INSERT INTO approval_queue(cart_id,payload,amount,created_at) VALUES (?,?,?,?)",
-                (body.cart_id, json.dumps(payload), addon_total, now())
-            ).lastrowid
-            log(conn, body.cart_id, "Gate", "pending", gate["reason"], addon_total)
-            outcome = {"status": "pending", "approval_id": approval_id}
-        else:
-            apply_action(conn, body.cart_id, payload)
-            log(conn, body.cart_id, "Gate", "ok", gate["reason"], addon_total)
-            log(conn, body.cart_id, "Execute", "executed", "Applied approved add-ons and discount to the cart.", addon_total)
-            outcome = {"status": "executed"}
+        gate = {**gate, "status": "pending", "reason": "Human approval is required before any Growth Agent cart or discount change."}
+        payload = {
+            "addons": [{"product_id": a["product_id"], "qty": a["qty"], "reasoning": a.get("reasoning", "") , "product_name": a["product"].get("name"), "price_snapshot": a["product"]["price"]} for a in addons],
+            "discount_pct": discount["accepted"],
+            "current_subtotal": cart["subtotal"],
+            "financial_impact": {
+                "current_subtotal": cart["subtotal"], "addon_total": addon_total,
+                "discount_pct": discount["accepted"], "estimated_total_before_discount": cart["subtotal"] + addon_total,
+                "estimated_total_after_discount": round((cart["subtotal"] + addon_total) * (1 - discount["accepted"] / 100), 2),
+                "cart_increase_pct": round((addon_total / cart["subtotal"] * 100) if cart["subtotal"] else 0, 1),
+            },
+        }
+        approval_id = conn.execute(
+            "INSERT INTO approval_queue(cart_id,payload,amount,created_at) VALUES (?,?,?,?)",
+            (body.cart_id, json.dumps(payload), addon_total, now())
+        ).lastrowid
+        log(conn, body.cart_id, "Proposal", "created", "Growth Agent proposal created; awaiting human approval.", addon_total)
+        log(conn, body.cart_id, "Gate", "pending", "Human approval is required before any cart mutation.", addon_total)
+        outcome = {"status": "pending", "approval_id": approval_id}
             
         updated_cart = cart_data(conn, body.cart_id)
         return {
@@ -453,7 +487,8 @@ def run_agent(body: AgentInput):
             "cart": updated_cart,
             "agent": {"name": "GrowthAgent", "run_id": proposal.get("execution_metadata", {}).get("trace_id"), "timestamp": now()},
             "explanation": {"summary": proposal.get("reasoning", ""), "factors": ["Catalog and stock validated", "Cart impact calculated server-side", "Policy gate evaluated"]},
-            "next_action": {"type": "approval" if outcome["status"] == "pending" else "checkout"},
+            "financial_impact": payload["financial_impact"],
+            "next_action": {"type": "approval"},
         }
 
 @app.get("/api/approvals")
@@ -466,11 +501,19 @@ def decide_approval(approval_id: int, decision: str):
     if decision not in {"approve", "reject"}:
         raise HTTPException(404, "Unknown approval action")
     with connect() as conn:
-        row = conn.execute("SELECT * FROM approval_queue WHERE id=? AND status='pending'", (approval_id,)).fetchone()
+        row = conn.execute("SELECT * FROM approval_queue WHERE id=?", (approval_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Pending approval not found")
+        if row["status"] != "pending":
+            return {"id": approval_id, "status": row["status"], "cart": cart_data(conn, row["cart_id"]), "message": "Approval has already been decided; no action was executed."}
         if decision == "approve":
-            apply_action(conn, row["cart_id"], json.loads(row["payload"]))
+            payload = json.loads(row["payload"])
+            valid, reason, current_cart = validate_approval_payload(conn, row["cart_id"], payload)
+            if not valid:
+                conn.execute("UPDATE approval_queue SET status='failed' WHERE id=?", (approval_id,))
+                log(conn, row["cart_id"], "Gate", "blocked", reason, row["amount"])
+                return {"id": approval_id, "status": "stale", "reason": reason, "cart": current_cart}
+            apply_action(conn, row["cart_id"], payload)
             status, kind, detail = "approved", "ok", "Human approved and executed queued growth action."
             log(conn, row["cart_id"], "Execute", "executed", "Queued add-ons were added to the cart.", row["amount"])
         else:

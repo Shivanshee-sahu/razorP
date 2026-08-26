@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import RecommendationReason from './RecommendationReason';
 
 const money = (n) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
@@ -176,6 +177,7 @@ export default function AgentPanel({ result, loading, onRun }) {
                       <h4>{addon.product?.name || 'Unknown Product'}</h4>
                       <p>{addon.reasoning}</p>
                       <span>{addon.product?.stock ?? 0} in stock</span>
+                      <RecommendationReason addon={addon} cartItems={result.cart?.items || []} />
                     </div>
                     <strong>{money(addon.product?.price)}</strong>
                   </article>
