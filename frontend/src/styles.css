@@ -2417,370 +2417,6 @@ a {
 }
 
 
-/* =========================================================
-   APPROVAL QUEUE
-   ========================================================= */
-
-.approvals-view {
-  max-width: 1000px;
-  margin: 0 auto;
-}
-
-.approval-panel {
-  border: 1px solid var(--border);
-  border-radius: 16px;
-
-  background: var(--surface);
-
-  box-shadow: var(--shadow-md);
-
-  overflow: hidden;
-}
-
-.approval-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  padding: 24px 26px;
-
-  border-bottom: 1px solid var(--border);
-}
-
-.approval-header h2 {
-  font-size: 19px;
-}
-
-.approval-subtitle {
-  margin-top: 5px;
-
-  color: var(--text-muted);
-
-  font-size: 10px;
-}
-
-.approval-count {
-  display: flex;
-  align-items: center;
-
-  gap: 8px;
-
-  padding: 7px 11px;
-
-  border: 1px solid var(--border);
-  border-radius: 20px;
-
-  color: var(--text-muted);
-
-  font-size: 9px;
-  font-weight: 600;
-}
-
-.approval-count strong {
-  color: var(--text);
-
-  font-size: 12px;
-}
-
-.approval-count.has-items {
-  background: var(--warning-light);
-  border-color: var(--warning-border);
-  color: var(--warning);
-}
-
-.approval-count.has-items strong {
-  color: var(--warning);
-}
-
-
-/* Empty */
-
-.approval-empty-new {
-  min-height: 240px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  gap: 15px;
-
-  padding: 40px;
-}
-
-.approval-success-icon {
-  width: 48px;
-  height: 48px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 50%;
-
-  background: var(--success-light);
-  color: var(--success);
-
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.approval-empty-new h3 {
-  font-size: 14px;
-}
-
-.approval-empty-new p {
-  max-width: 500px;
-
-  margin-top: 5px;
-
-  color: var(--text-muted);
-
-  font-size: 10px;
-  line-height: 1.6;
-}
-
-
-/* List */
-
-.approval-list {
-  padding: 18px 20px;
-
-  display: flex;
-  flex-direction: column;
-
-  gap: 12px;
-}
-
-.approval-item {
-  padding: 17px;
-
-  border: 1px solid var(--border);
-  border-radius: 11px;
-
-  background: var(--surface);
-
-  transition: .15s ease;
-}
-
-.approval-item:hover {
-  border-color: var(--warning-border);
-
-  box-shadow: var(--shadow-sm);
-}
-
-.approval-item-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  padding-bottom: 13px;
-
-  border-bottom: 1px solid var(--border);
-}
-
-.approval-action-id {
-  display: flex;
-  align-items: center;
-
-  gap: 10px;
-}
-
-.approval-action-id > span {
-  color: var(--text-muted);
-
-  font-family: "DM Mono", monospace;
-
-  font-size: 9px;
-}
-
-.approval-action-id small {
-  color: var(--text-muted);
-
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: .08em;
-}
-
-.approval-action-id h3 {
-  margin-top: 3px;
-
-  font-size: 11px;
-}
-
-.approval-status {
-  display: flex;
-  align-items: center;
-
-  gap: 6px;
-
-  color: var(--warning);
-
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: .06em;
-}
-
-.approval-status span {
-  width: 6px;
-  height: 6px;
-
-  border-radius: 50%;
-
-  background: var(--warning);
-}
-
-
-/* Main */
-
-.approval-main {
-  display: grid;
-
-  grid-template-columns: 36px 1fr auto;
-
-  align-items: center;
-
-  gap: 12px;
-
-  padding: 16px 0;
-}
-
-.approval-warning {
-  width: 34px;
-  height: 34px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 8px;
-
-  background: var(--warning-light);
-  color: var(--warning);
-
-  font-weight: 800;
-}
-
-.approval-description p {
-  color: var(--text-secondary);
-
-  font-size: 10px;
-}
-
-.approval-description p strong {
-  color: var(--text);
-}
-
-.approval-description small {
-  display: block;
-
-  max-width: 600px;
-
-  margin-top: 5px;
-
-  color: var(--text-muted);
-
-  font-size: 9px;
-  line-height: 1.5;
-}
-
-.approval-value {
-  text-align: right;
-}
-
-.approval-value small {
-  display: block;
-
-  color: var(--text-muted);
-
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: .08em;
-}
-
-.approval-value strong {
-  display: block;
-
-  margin-top: 4px;
-
-  color: var(--text);
-
-  font-size: 17px;
-}
-
-
-/* Policy note */
-
-.approval-policy-note {
-  display: flex;
-  align-items: center;
-
-  gap: 7px;
-
-  padding: 9px 11px;
-
-  border-radius: 7px;
-
-  background: var(--surface-muted);
-
-  color: var(--text-muted);
-
-  font-size: 8px;
-}
-
-.approval-policy-note span {
-  color: var(--success);
-
-  font-weight: 800;
-}
-
-
-/* Actions */
-
-.approval-actions {
-  display: flex;
-  justify-content: flex-end;
-
-  gap: 7px;
-
-  margin-top: 13px;
-}
-
-.approval-actions button {
-  padding: 8px 13px;
-
-  border-radius: 7px;
-
-  font-size: 9px;
-  font-weight: 700;
-}
-
-.approve-button {
-  border: none;
-
-  background: var(--primary);
-  color: white;
-}
-
-.approve-button:hover {
-  background: var(--primary-hover);
-}
-
-.reject-button {
-  border: 1px solid var(--border);
-
-  background: var(--surface);
-
-  color: var(--text-secondary);
-}
-
-.reject-button:hover {
-  background: var(--error-light);
-
-  border-color: rgba(192,57,43,.25);
-
-  color: var(--error);
-}
-
 
 /* =========================================================
    AUDIT TRAIL
@@ -4685,6 +4321,93 @@ a {
   font-size: 12px;
 }
 
+.merchant-catalog-page { display: grid; gap: 22px; }
+.merchant-catalog-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding: 26px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.merchant-catalog-header h2 { margin: 5px 0; font-size: 24px; }
+.merchant-catalog-header p:not(.section-kicker) { color: var(--text-secondary); font-size: 13px; }
+.merchant-catalog-list { display: grid; gap: 8px; }
+/* ============================================================
+   MERCHANT CATALOG PRODUCT ROW (FIXED OVERFLOW)
+============================================================ */
+
+.merchant-product-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) 0.7fr 0.8fr 0.65fr 0.8fr 0.9fr 0.8fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 15px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 11px;
+}
+
+.merchant-product-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0; /* Crucial for flex box truncation */
+}
+
+/* FIX: Allow inner text container to shrink and enforce truncation */
+.merchant-product-main > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.merchant-product-main img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.merchant-product-main h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.merchant-product-main p {
+  margin: 4px 0 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}.catalog-active, .catalog-inactive { font-weight: 700; font-size: 10px; }
+.catalog-active { color: var(--success); }
+.catalog-inactive { color: var(--error); }
+.merchant-product-actions { display: flex; gap: 6px; }
+.merchant-product-actions button { padding: 7px 9px; font-size: 11px; }
+.catalog-modal-backdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 20px; background: rgba(10, 15, 18, .55); }
+.catalog-modal { width: min(680px, 100%); max-height: 90vh; overflow: auto; display: grid; gap: 14px; padding: 24px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-md); }
+.modal-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.catalog-modal label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; }
+.catalog-modal input, .catalog-modal textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.catalog-modal textarea { min-height: 76px; resize: vertical; }
+.catalog-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.catalog-toggles { display: flex; flex-wrap: wrap; gap: 12px; }
+.catalog-toggles label { display: flex; align-items: center; gap: 6px; }
+.catalog-modal footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.inline-error { padding: 12px 14px; border: 1px solid var(--error); border-radius: 6px; background: var(--error-light); color: var(--error); font-size: 12px; }
+
+@media (max-width: 1100px) {
+  .merchant-product-row { grid-template-columns: minmax(220px, 2fr) repeat(3, 1fr); }
+  .merchant-product-row > :nth-child(5), .merchant-product-row > :nth-child(6), .merchant-product-row > :nth-child(7) { display: none; }
+}
+
+@media (max-width: 650px) {
+  .merchant-catalog-header { flex-direction: column; }
+  .merchant-product-row { grid-template-columns: 1fr auto; gap: 9px; }
+  .merchant-product-row > :not(.merchant-product-main):not(.merchant-product-actions) { display: none; }
+  .catalog-form-grid { grid-template-columns: 1fr 1fr; }
+}
+
 .experience-switcher { display: flex; gap: 4px; margin: 0 8px 16px; padding: 4px; background: rgba(255,255,255,.06); border-radius: 8px; }
 .experience-switcher button { flex: 1; border: 0; border-radius: 6px; padding: 8px 5px; background: transparent; color: var(--sidebar-text); font-size: 11px; font-weight: 700; }
 .experience-switcher button.active { background: var(--primary); color: #fff; }
@@ -4716,6 +4439,7 @@ a {
 .recommendation-reason ul { list-style: none; display: grid; gap: 3px; color: var(--success); }
 .discount-request { display: flex; align-items: center; gap: 5px; margin-top: 9px; color: var(--text-secondary); font-size: 11px; }
 .discount-request input { width: 52px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); }
+.discount-approved { display: block; margin-top: 9px; color: var(--success); font-size: 11px; font-weight: 700; }
 .addon-approval-status { display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
 .addon-approval-status.pending { color: var(--warning); }
 .addon-approval-status.approved { color: var(--success); }
@@ -5531,28 +5255,62 @@ a {
   .policy-limit-grid {
     grid-template-columns: 1fr;
   }
+}/* ==================================================
+   TRANSACTIONS / ORDERS HEADER & PANEL
+================================================== */
+
+.cart-panel {
+  background: #ffffff;
+  border: 1px solid var(--border, #dfe5e2);
+  border-radius: 20px;
+  padding: 32px;
 }
+
+.orders-header {
+  margin-bottom: 24px;
+  padding-top: 4px; /* Prevents "TRANSACTIONS" top text clipping */
+}
+
+/* Kicker label */
+.section-kicker {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8a9490;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+/* Main Heading */
+.orders-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #18211f;
+  line-height: 1.2;
+  margin: 0;
+}
+
 /* ==================================================
-   ORDERS
+   ORDERS LIST
 ================================================== */
 
 .orders-list {
-  margin-top: 28px;
+  margin-top: 24px;
   border: 1px solid var(--border, #dfe5e2);
   border-radius: 18px;
   overflow: hidden;
-  background: #fff;
+  background: #ffffff;
 }
 
 .order-row {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 180px 110px;
+  grid-template-columns: minmax(240px, 1fr) 180px auto;
   align-items: center;
   gap: 32px;
-
   min-height: 116px;
   padding: 26px 28px;
-
   border-bottom: 1px solid var(--border, #e1e6e3);
 }
 
@@ -5560,7 +5318,7 @@ a {
   border-bottom: none;
 }
 
-/* Order details */
+/* Order Info */
 
 .order-info {
   display: flex;
@@ -5581,7 +5339,6 @@ a {
   font-weight: 700;
   color: #18211f;
   line-height: 1.3;
-
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5591,15 +5348,11 @@ a {
 .order-status {
   display: inline-flex;
   align-items: center;
-
   margin-top: 3px;
   padding: 4px 9px;
-
   border-radius: 999px;
-
   background: #edf7e7;
   color: #5d9f2d;
-
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
@@ -5630,29 +5383,50 @@ a {
   white-space: nowrap;
 }
 
-/* Receipt */
+/* Receipt Button */
 
-.receipt-btn {
+.receipt-download-btn {
   justify-self: end;
-
-  min-width: 92px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 130px;
   height: 40px;
-
   padding: 0 18px;
-
-  border: none;
-  border-radius: 9px;
-
+  border: 1px solid var(--border, #dfe5e2);
+  border-radius: 10px;
+  background: #ffffff;
+  color: #18211f;
   font-size: 13px;
   font-weight: 700;
-
+  white-space: nowrap;
   cursor: pointer;
+  transition: all 0.15s ease-in-out;
 }
 
-/* Responsive */
+.receipt-download-btn:hover {
+  background: #edf7e7;
+  border-color: #6eae32;
+  color: #568b27;
+}
+
+.receipt-download-btn:active {
+  background: #e2f2da;
+}
+
+/* Empty State */
+
+.empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: #6f7975;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Responsive Layout */
 
 @media (max-width: 760px) {
-
   .order-row {
     grid-template-columns: 1fr auto;
     gap: 18px;
@@ -5664,25 +5438,1205 @@ a {
     grid-row: 2;
   }
 
-  .receipt-btn {
+  .receipt-download-btn {
     grid-column: 2;
     grid-row: 1 / span 2;
   }
 }
-.receipt-download-btn {
-  border: 1px solid #dfe5e2;
-  background: #ffffff;
-  color: #34413b;
-  padding: 10px 16px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
+/* Container and Layout Controls */
+.agent-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
-.receipt-download-btn:hover {
-  background: #edf7e7;
-  border-color: #6eae32;
-  color: #568b27;
+/* Discount Input Layout */
+.discount-input-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.discount-request {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.discount-field {
+  display: flex;
+  align-items: center;
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0 0.5rem;
+  transition: border-color 0.15s ease;
+}
+
+.discount-field:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.discount-field input {
+  width: 3.5rem;
+  border: none;
+  background: transparent;
+  padding: 0.4rem 0.2rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  outline: none;
+  color: #111827;
+}
+
+.discount-field .unit {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Primary Action Buttons */
+.addon-select-button {
+  display: inline-flex;
+  margin:0.8rem auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #0f172a;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.addon-select-button:hover:not(:disabled) {
+  background-color: #1e293b;
+  transform: translateY(-1px);
+}
+
+.addon-select-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.addon-select-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Success Button State (Add Approved) */
+.addon-select-button.success {
+  background-color: #16a34a;
+}
+
+.addon-select-button.success:hover:not(:disabled) {
+  background-color: #15803d;
+}
+
+/* Pending Button State */
+.addon-select-button.pending-button {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  cursor: not-allowed;
+}
+
+
+
+.agent-run-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Helpers & Status Badges */
+.addon-helper-text {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.requested-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+/* Container and Layout Controls */
+.agent-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Discount Input Layout */
+.discount-input-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.discount-request {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #4b5563;
+}
+
+.discount-field {
+  display: flex;
+  align-items: center;
+  background: #f9fafb;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  padding: 0 0.5rem;
+  transition: border-color 0.15s ease;
+}
+
+.discount-field:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.discount-field input {
+  width: 3.5rem;
+  border: none;
+  background: transparent;
+  padding: 0.4rem 0.2rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  outline: none;
+  color: #111827;
+}
+
+.discount-field .unit {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Primary Action Buttons */
+.addon-select-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: #0f172a;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.addon-select-button:hover:not(:disabled) {
+  background-color: #1e293b;
+  transform: translateY(-1px);
+}
+
+.addon-select-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.addon-select-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Success Button State (Add Approved) */
+.addon-select-button.success {
+  background-color: #16a34a;
+}
+
+.addon-select-button.success:hover:not(:disabled) {
+  background-color: #15803d;
+}
+
+/* Pending Button State */
+.addon-select-button.pending-button {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  cursor: not-allowed;
+}
+
+/* Growth Agent Run Button */
+
+
+.agent-run-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.agent-run-button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Helpers & Status Badges */
+.addon-helper-text {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.requested-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+/* =========================================================
+   APPROVAL QUEUE — PAGE CONTAINER
+   ========================================================= */
+
+.approval-panel {
+  width: min(100% - 48px, 1200px);
+  margin: 0 auto;
+  padding: 32px 0 60px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172033;
+  box-sizing: border-box;
+}
+
+.approval-panel *,
+.approval-panel *::before,
+.approval-panel *::after {
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+.approval-header {
+  width: 100%;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 32px;
+
+  padding: 0 0 20px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.approval-header > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.approval-header h2 {
+  margin: 4px 0 0;
+
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+
+  color: #111827;
+}
+
+.section-kicker {
+  margin: 0;
+
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.approval-subtitle {
+  margin: 8px 0 0;
+
+  max-width: 760px;
+
+  font-size: 14px;
+  line-height: 1.5;
+
+  color: #64748b;
+}
+
+
+/* =========================================================
+   APPROVAL COUNT
+   ========================================================= */
+
+.approval-count {
+  flex: 0 0 auto;
+
+  width: 104px;
+  height: 78px;
+
+  padding: 10px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+
+  background: #fffaf3;
+}
+
+.approval-count strong {
+  font-size: 22px;
+  line-height: 1;
+
+  color: #c2410c;
+}
+
+.approval-count span {
+  margin-top: 7px;
+
+  font-size: 11px;
+  font-weight: 600;
+
+  color: #c2410c;
+}
+
+.approval-count.has-items {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+/* Active state before clicking */
+.addon-select-button.success {
+  background-color: #16a34a;
+  color: #ffffff;
+}
+
+.addon-select-button.success:hover:not(:disabled) {
+  background-color: #15803d;
+}
+
+/* State after user clicks "Add Approved Add-on" */
+.addon-select-button.added-button {
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  cursor: default;
+  font-weight: 600;
+}
+
+.addon-select-button.added-button:disabled {
+  opacity: 1;
+}
+/* =========================================================
+   APPROVAL LIST
+   ========================================================= */
+
+.approval-list {
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+
+/* =========================================================
+   APPROVAL CARD
+   ========================================================= */
+
+.approval-item {
+  width: 100%;
+  min-width: 0;
+
+  background: #ffffff;
+
+  border: 1px solid #dfe5ec;
+  border-radius: 0.9rem;
+
+  overflow: hidden;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 6px 20px rgba(15, 23, 42, 0.04);
+}
+
+
+/* =========================================================
+   TOP BAR
+   ========================================================= */
+
+.approval-item-top {
+  width: 100%;
+  min-height: 78px;
+
+  padding: 1rem 1.4rem;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 1.5rem;
+
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.approval-action-id {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.approval-action-id > span {
+  flex-shrink: 0;
+
+  font-size: 0.7rem;
+  font-weight: 700;
+
+  color: #64748b;
+
+  font-variant-numeric: tabular-nums;
+}
+
+.approval-action-id small {
+  display: block;
+
+  margin-bottom: 0.2rem;
+
+  font-size: 0.62rem;
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+
+  color: #64748b;
+}
+
+.approval-action-id h3 {
+  margin: 0;
+
+  font-size: 0.9rem;
+  line-height: 1.25;
+  font-weight: 700;
+
+  color: #172033;
+}
+
+.approval-status {
+  flex-shrink: 0;
+
+  display: inline-flex;
+  align-items: center;
+
+  gap: 0.4rem;
+
+  font-size: 0.72rem;
+  font-weight: 800;
+
+  letter-spacing: 0.04em;
+
+  color: #d97706;
+}
+
+.approval-status span {
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+
+  background: #f59e0b;
+}
+
+
+/* =========================================================
+   MAIN CONTENT
+   ========================================================= */
+
+.approval-main {
+  width: 100%;
+  min-width: 0;
+
+  display: block;
+
+  padding: 0;
+}
+
+
+/* =========================================================
+   FINANCIAL IMPACT SIMULATOR
+   ========================================================= */
+
+.merchant-decision-preview {
+  width: 100%;
+  min-width: 0;
+
+  padding: 1.6rem;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 1.35rem;
+}
+
+
+/* =========================================================
+   SIMULATOR HEADER
+   ========================================================= */
+
+.preview-header {
+  width: 100%;
+  min-width: 0;
+
+  display: grid;
+
+  /*
+     IMPORTANT:
+     Left side takes all available space.
+     Badge stays on the right.
+  */
+  grid-template-columns: minmax(0, 1fr) auto;
+
+  align-items: start;
+
+  column-gap: 2rem;
+}
+
+.preview-header > div:first-child {
+  width: 100%;
+  min-width: 0;
+}
+
+.preview-header .card-label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.preview-header h3 {
+  width: 100%;
+  max-width: 720px;
+
+  margin: 0;
+
+  font-size: 1.3rem;
+  line-height: 1.3;
+  font-weight: 750;
+
+  color: #172033;
+}
+
+.card-label {
+  font-size: 0.68rem;
+  line-height: 1.2;
+
+  font-weight: 800;
+  letter-spacing: 0.08em;
+
+  color: #64748b;
+}
+
+.preview-badge {
+  flex-shrink: 0;
+
+  padding: 0.45rem 0.7rem;
+
+  border-radius: 0.4rem;
+
+  background: #eef2ff;
+  color: #4338ca;
+
+  font-size: 0.68rem;
+  line-height: 1.2;
+
+  font-weight: 800;
+  letter-spacing: 0.04em;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   DISCOUNT SIMULATOR
+   ========================================================= */
+
+.discount-simulator-box {
+  width: 100%;
+  min-width: 0;
+
+  padding: 1rem 1.1rem;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 1rem;
+
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 0.7rem;
+}
+
+.discount-info-row {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 1rem;
+}
+
+.discount-meta {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 2rem;
+
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.discount-meta strong {
+  color: #172033;
+  font-weight: 750;
+}
+
+
+/* =========================================================
+   DISCOUNT CONTROL
+   ========================================================= */
+
+.discount-control-group {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns: auto minmax(160px, 1fr) auto;
+
+  align-items: center;
+
+  gap: 1rem;
+}
+
+.discount-control-group > label {
+  font-size: 0.8rem;
+  font-weight: 700;
+
+  color: #475569;
+}
+
+.discount-slider {
+  width: 100%;
+  min-width: 0;
+
+  cursor: pointer;
+
+  accent-color: #111827;
+}
+
+.discount-number-input {
+  min-width: 82px;
+  height: 40px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 0.65rem;
+
+  background: #ffffff;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 0.45rem;
+}
+
+.discount-number-input input {
+  width: 48px;
+
+  padding: 0;
+
+  border: none;
+  outline: none;
+
+  background: transparent;
+
+  text-align: right;
+
+  font-size: 0.9rem;
+  font-weight: 750;
+
+  color: #111827;
+}
+
+.discount-number-input span {
+  margin-left: 0.25rem;
+
+  font-size: 0.85rem;
+
+  color: #64748b;
+}
+
+
+/* =========================================================
+   FINANCIAL IMPACT
+   ========================================================= */
+
+.financial-impact-grid {
+  width: 100%;
+  min-width: 0;
+
+  display: grid;
+
+  /*
+     FOUR CARDS IN ONE ROW
+  */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  gap: 0.8rem;
+}
+
+.financial-impact-grid > div {
+  min-width: 0;
+  min-height: 92px;
+
+  padding: 0.9rem 1rem;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+}
+
+.financial-impact-grid small {
+  font-size: 0.65rem;
+  line-height: 1.25;
+
+  font-weight: 750;
+  letter-spacing: 0.05em;
+
+  color: #64748b;
+}
+
+.financial-impact-grid strong {
+  margin-top: 0.35rem;
+
+  font-size: 1.15rem;
+  line-height: 1.2;
+
+  font-weight: 800;
+
+  color: #172033;
+}
+
+.text-discount {
+  color: #dc2626 !important;
+}
+
+.text-success {
+  color: #16a34a !important;
+}
+
+
+/* =========================================================
+   CART GROWTH
+   ========================================================= */
+
+.cart-growth-preview {
+  width: 100%;
+  min-width: 0;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto
+    minmax(0, 1fr)
+    auto;
+
+  align-items: center;
+
+  gap: 1rem;
+
+  padding: 1rem 1.15rem;
+
+  background: #faf5ff;
+
+  border: 1px solid #ede9fe;
+  border-radius: 0.65rem;
+}
+
+.cart-growth-preview > div:not(.growth-arrow):not(.growth-percentage) {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 0.2rem;
+}
+
+.cart-growth-preview span {
+  font-size: 0.68rem;
+  font-weight: 700;
+
+  color: #7c3aed;
+}
+
+.cart-growth-preview strong {
+  font-size: 1rem;
+
+  color: #312e81;
+}
+
+.growth-arrow {
+  font-size: 1.2rem;
+  font-weight: 800;
+
+  color: #8b5cf6;
+}
+
+.growth-percentage {
+  justify-self: end;
+
+  padding: 0.4rem 0.65rem;
+
+  border-radius: 0.4rem;
+
+  background: #ede9fe;
+
+  font-size: 0.72rem;
+  font-weight: 800;
+
+  color: #6d28d9;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   POLICY
+   ========================================================= */
+
+.policy-preview {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 0.65rem;
+}
+
+.policy-item {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 0.55rem;
+
+  padding: 0.7rem 0.8rem;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+
+  background: #ffffff;
+
+  font-size: 0.76rem;
+  line-height: 1.35;
+
+  color: #475569;
+}
+
+.policy-item .check {
+  flex-shrink: 0;
+
+  width: 20px;
+  height: 20px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #dcfce7;
+  color: #15803d;
+
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.policy-item.success {
+  color: #166534;
+}
+
+.policy-item.error {
+  background: #fef2f2;
+
+  border-color: #fecaca;
+
+  color: #b91c1c;
+
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   APPROVAL ACTIONS
+   ========================================================= */
+
+.approval-actions {
+  width: 100%;
+
+  display: flex;
+
+  justify-content: flex-end;
+  align-items: center;
+
+  gap: 0.75rem;
+
+  padding: 1rem 1.4rem;
+
+  background: #f8fafc;
+
+  border-top: 1px solid #e2e8f0;
+}
+
+.approve-button,
+.reject-button {
+  min-height: 40px;
+
+  padding: 0.55rem 1rem;
+
+  border-radius: 0.45rem;
+
+  font-size: 0.8rem;
+  font-weight: 750;
+
+  cursor: pointer;
+
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.approve-button {
+  border: 1px solid #15803d;
+
+  background: #16a34a;
+
+  color: #ffffff;
+}
+
+.approve-button:hover:not(:disabled) {
+  background: #15803d;
+}
+
+.approve-button:disabled {
+  background: #cbd5e1;
+
+  border-color: #cbd5e1;
+
+  color: #94a3b8;
+
+  cursor: not-allowed;
+}
+
+.reject-button {
+  border: 1px solid #cbd5e1;
+
+  background: #ffffff;
+
+  color: #475569;
+}
+
+.reject-button:hover {
+  background: #f1f5f9;
+
+  border-color: #94a3b8;
+
+  color: #172033;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+   ========================================================= */
+
+.approval-empty-new {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+
+  gap: 1rem;
+
+  padding: 1.5rem;
+
+  background: #ffffff;
+
+  border: 1px solid #e2e8f0;
+
+  border-radius: 0.75rem;
+}
+
+.approval-success-icon {
+  width: 44px;
+  height: 44px;
+
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+
+  background: #dcfce7;
+
+  color: #15803d;
+
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+  .approval-panel {
+    max-width: 100%;
+  }
+
+  .financial-impact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cart-growth-preview {
+    grid-template-columns: 1fr auto 1fr;
+  }
+
+  .growth-percentage {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .policy-preview {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+@media (max-width: 650px) {
+
+  .approval-header {
+    flex-direction: column;
+  }
+
+  .approval-count {
+    align-self: flex-start;
+  }
+
+  .approval-item-top {
+    align-items: flex-start;
+  }
+
+  .merchant-decision-preview {
+    padding: 1rem;
+  }
+
+  .preview-header {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .preview-badge {
+    justify-self: start;
+  }
+
+  .discount-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .discount-control-group {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .discount-number-input {
+    width: 90px;
+  }
+
+  .financial-impact-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cart-growth-preview {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .growth-arrow {
+    transform: rotate(90deg);
+    justify-self: start;
+  }
+
+  .growth-percentage {
+    grid-column: auto;
+  }
+
+  .approval-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .approve-button,
+  .reject-button {
+    width: 100%;
+  }
+}
+
+
+@media (max-width: 420px) {
+
+  .financial-impact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-item-top {
+    flex-direction: column;
+  }
+
+  .approval-status {
+    align-self: flex-start;
+  }
 }

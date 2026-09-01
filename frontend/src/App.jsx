@@ -8,6 +8,7 @@ import AuditTrail from './components/AuditTrail';
 import CheckoutModal from './components/CheckoutModal';
 import AgentFlow from './components/AgentFlow';
 import AgentActivityFeed from './components/AgentActivityFeed';
+import MerchantCatalog from './components/MerchantCatalog';
 
 const CART_ID = 'demo-cart';
 
@@ -46,6 +47,7 @@ export default function App() {
   // ============================================================
 
   const [catalog, setCatalog] = useState([]);
+  const [merchantCatalog, setMerchantCatalog] = useState([]);
   const [cart, setCart] = useState(null);
   const [agent, setAgent] = useState(() => readSession('cc-growth-session'));
   const [approvals, setApprovals] = useState([]);
@@ -97,6 +99,7 @@ export default function App() {
   const validPages = [
     'dashboard',
     'products',
+    'catalog',
     'cart',
     'growth-ai',
     'buyer',
@@ -108,7 +111,7 @@ export default function App() {
   ];
 
   const buyerPages = new Set(['buyer', 'products', 'cart', 'growth-ai', 'orders']);
-  const merchantPages = new Set(['dashboard', 'products', 'approvals', 'orders', 'revenue', 'policies', 'audit']);
+  const merchantPages = new Set(['dashboard', 'catalog', 'approvals', 'orders', 'revenue', 'policies', 'audit']);
 
   const pageForExperience = (page, role = experience) => {
     if (role === 'buyer' && !buyerPages.has(page)) return 'buyer';
@@ -220,6 +223,7 @@ const downloadReceipt = async (orderId) => {
         auditData,
         growthApprovals,
         growthRecommendationData,
+        merchantCatalogData,
       ] = await Promise.all([
         api('/api/catalog'),
         api(`/api/cart/${CART_ID}`),
@@ -231,6 +235,7 @@ const downloadReceipt = async (orderId) => {
         api(`/api/audit/${CART_ID}`),
         api(`/api/growth/approvals/buyer/${CART_ID}`),
         api(`/api/agent/growth/recommendations/${CART_ID}`),
+        api('/api/merchant/catalog'),
       ]);
 
       setCatalog(
@@ -238,6 +243,7 @@ const downloadReceipt = async (orderId) => {
           ? products
           : []
       );
+      setMerchantCatalog(Array.isArray(merchantCatalogData) ? merchantCatalogData : []);
 
       setCart(currentCart);
       setAgent((previous) => {
@@ -247,11 +253,12 @@ const downloadReceipt = async (orderId) => {
         return {
           ...recovered,
           cart: currentCart,
-          addons: (previous.addons || []).map((addon) => ({
+          addons: (recovered.addons || []).map((addon) => ({
             ...addon,
             approval_status: statuses.get(addon.product_id)?.status || addon.approval_status || 'NOT_REQUESTED',
             approved_discount_pct: statuses.get(addon.product_id)?.merchant_approved_discount_pct,
             final_price: statuses.get(addon.product_id)?.final_price,
+            requested_discount_pct: statuses.get(addon.product_id)?.buyer_requested_discount_pct ?? addon.requested_discount_pct,
           })),
         };
       });
@@ -396,6 +403,25 @@ const downloadReceipt = async (orderId) => {
       await refresh();
     } catch (e) {
       setError(e.message || 'Unable to add the selected Growth recommendations. Your cart was not changed.');
+    }
+  };
+
+  const requestGrowthDiscount = async (addon, requestedDiscountPct) => {
+    try {
+      setError('');
+      const result = await api('/api/growth/approval/request', {
+        method: 'POST',
+        body: JSON.stringify({ cart_id: CART_ID, product_id: addon.product_id, qty: addon.qty || 1, requested_discount_pct: Number(requestedDiscountPct) }),
+      });
+      setAgent((previous) => previous ? {
+        ...previous,
+        addons: (previous.addons || []).map((item) => item.product_id === addon.product_id ? { ...item, approval_status: 'PENDING', requested_discount_pct: Number(requestedDiscountPct), approval_id: result.approval_id } : item),
+      } : previous);
+      await refresh();
+      return result;
+    } catch (e) {
+      setError(e.message || 'Unable to send the discount request.');
+      return null;
     }
   };
 
@@ -894,6 +920,12 @@ const viewReceipt = (orderId) => {
     },
 
     {
+      key: 'catalog',
+      label: 'Product Catalog',
+      icon: '▤',
+    },
+
+    {
       key: 'cart',
       label: 'Cart',
       icon: '▱',
@@ -1075,6 +1107,10 @@ const viewReceipt = (orderId) => {
               {activePage ===
                 'products' &&
                 'Curated Cookware Catalog'}
+
+              {activePage ===
+                'catalog' &&
+                'Product Catalog Management'}
 
               {activePage ===
                 'cart' &&
@@ -1363,6 +1399,12 @@ const viewReceipt = (orderId) => {
           {/* ==================================================
               PRODUCTS
           ================================================== */}
+
+          {activePage === 'catalog' && (
+            <div className="page-view catalog-view">
+              <MerchantCatalog products={merchantCatalog} onRefresh={refresh} />
+            </div>
+          )}
 
           {activePage ===
             'products' && (
@@ -1753,6 +1795,8 @@ const viewReceipt = (orderId) => {
                   onRun={run}
                   onSelectAddons={selectGrowthAddons}
                   onAddApproved={addBuyerToCart}
+                  onRequestDiscount={requestGrowthDiscount}
+                  maxDiscountPct={policies?.limits?.max_discount_pct ?? 10}
                 />
 
                 <AgentActivityFeed events={auditEvents} />
@@ -2191,102 +2235,55 @@ const viewReceipt = (orderId) => {
             </div>
           )}
 
-          {/* ==================================================
-    ORDERS
-================================================== */}
-
-{activePage === 'orders' && (
+          {activePage === 'orders' && (
   <div className="page-view">
-
     <section className="cart-panel">
-
-      <p className="section-kicker">
-        TRANSACTIONS
-      </p>
-
-      <h2>
-        Orders
-      </h2>
+      {/* HEADER WRAPPER */}
+      <header className="orders-header">
+        <span className="section-kicker">TRANSACTIONS</span>
+        <h2 className="orders-title">Orders</h2>
+      </header>
 
       {!orders.length ? (
-
-        <div className="empty-state">
-          No orders yet.
-        </div>
-
+        <div className="empty-state">No orders yet.</div>
       ) : (
-
         <div className="orders-list">
-
           {orders.map((order, index) => {
-
-            const id =
-              order.id ||
-              order.order_id ||
-              `order-${index}`;
-
-            const amount =
-              order.amount ??
-              order.total ??
-              0;
-
-            const status =
-              order.status ||
-              'Completed';
+            const id = order.id || order.order_id || `order-${index}`;
+            const amount = order.amount ?? order.total ?? 0;
+            const status = order.status || 'Completed';
 
             return (
-              <article
-                className="order-row"
-                key={id}
-              >
-
-                {/* Order information */}
+              <article className="order-row" key={id}>
+                {/* Order Details */}
                 <div className="order-info">
-
-                  <span className="order-label">
-                    Order
-                  </span>
-
+                  <span className="order-label">Order</span>
                   <strong className="order-id">
                     #{order.id || order.order_id}
                   </strong>
-
-                  <span className="order-status">
-                    {status}
-                  </span>
-
+                  <span className="order-status">{status}</span>
                 </div>
 
                 {/* Amount */}
                 <div className="order-amount">
-
-                  <span className="amount-label">
-                    Amount
-                  </span>
-
-                  <strong>
-                    {money(amount)}
-                  </strong>
-
+                  <span className="amount-label">Amount</span>
+                  <strong>{money(amount)}</strong>
                 </div>
 
-                {/* Receipt */}
+                {/* Download Button */}
                 <button
-  className="receipt-download-btn"
-  onClick={() => downloadReceipt(order.id)}
->
-  Download Receipt
-</button>
-
+                  type="button"
+                  className="receipt-download-btn"
+                  onClick={() => downloadReceipt(order.id)}
+                >
+                  Download Receipt
+                </button>
               </article>
             );
           })}
-
         </div>
       )}
-
     </section>
-
   </div>
 )}
 

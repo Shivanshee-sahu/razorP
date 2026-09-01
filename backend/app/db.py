@@ -21,7 +21,12 @@ CREATE TABLE IF NOT EXISTS catalog (
     price INTEGER NOT NULL, 
     stock INTEGER NOT NULL, 
     description TEXT,
-    image_url TEXT
+    image_url TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    ai_buyer_enabled INTEGER NOT NULL DEFAULT 1,
+    growth_agent_enabled INTEGER NOT NULL DEFAULT 1,
+    max_ai_discount_pct REAL NOT NULL DEFAULT 10,
+    max_recommended_qty INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS carts (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, discount_pct REAL NOT NULL DEFAULT 0, recovery_status TEXT);
 CREATE TABLE IF NOT EXISTS cart_items (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT NOT NULL REFERENCES carts(id), product_id TEXT NOT NULL REFERENCES catalog(id), qty INTEGER NOT NULL DEFAULT 1, unit_price INTEGER, UNIQUE(cart_id, product_id));
@@ -82,6 +87,17 @@ def seed() -> None:
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(cart_items)").fetchall()}
         if "unit_price" not in columns:
             conn.execute("ALTER TABLE cart_items ADD COLUMN unit_price INTEGER")
+        catalog_columns = {row["name"] for row in conn.execute("PRAGMA table_info(catalog)").fetchall()}
+        migrations = {
+            "active": "ALTER TABLE catalog ADD COLUMN active INTEGER NOT NULL DEFAULT 1",
+            "ai_buyer_enabled": "ALTER TABLE catalog ADD COLUMN ai_buyer_enabled INTEGER NOT NULL DEFAULT 1",
+            "growth_agent_enabled": "ALTER TABLE catalog ADD COLUMN growth_agent_enabled INTEGER NOT NULL DEFAULT 1",
+            "max_ai_discount_pct": "ALTER TABLE catalog ADD COLUMN max_ai_discount_pct REAL NOT NULL DEFAULT 10",
+            "max_recommended_qty": "ALTER TABLE catalog ADD COLUMN max_recommended_qty INTEGER NOT NULL DEFAULT 1",
+        }
+        for column, statement in migrations.items():
+            if column not in catalog_columns:
+                conn.execute(statement)
         catalog_path = ROOT / "catalog.json"
         if catalog_path.exists():
             data = json.loads(catalog_path.read_text(encoding="utf-8"))
