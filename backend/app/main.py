@@ -1,7 +1,9 @@
 import json
 import os
 import re
+import sqlite3
 import traceback
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -12,6 +14,8 @@ from app.buyer_mandate import (
     enable_mandate,
     disable_mandate,
     validate_mandate,
+    filter_catalog_by_mandate,
+    get_daily_spend,
 )
 import razorpay
 from fastapi import FastAPI, HTTPException, Request
@@ -607,6 +611,38 @@ def process_buyer_request(payload: BuyerRequestInput):
         )
 
     # ============================================================
+    # 4. FILTER CATALOG AGAINST BUYER MANDATE
+    # ============================================================
+    
+    # Initialize trace early
+    trace = []
+    
+    # For filtering, consider only NEW items being added, not existing cart
+    # The final mandate validation will check the total including existing cart
+    current_cart_total = 0  # Start from 0 for filtering new items only
+    
+    trace.append({
+        "step": "Loading buyer mandate",
+        "detail": f"Mandate {mandate['id']} loaded with max_order_amount={mandate.get('max_order_amount')}, max_item_price={mandate.get('max_item_price')}",
+        "status": "completed"
+    })
+    
+    eligible_catalog, ineligible_catalog = filter_catalog_by_mandate(
+        catalog_items,
+        mandate,
+        current_cart_total
+    )
+    
+    trace.append({
+        "step": "Filtering catalog against mandate",
+        "detail": f"Filtered {len(catalog_items)} products to {len(eligible_catalog)} eligible products under mandate",
+        "status": "completed"
+    })
+    
+    # Use only eligible catalog for recommendations
+    catalog_items = eligible_catalog
+
+    # ============================================================
     # 4. UNDERSTAND USER REQUEST
     # ============================================================
     requirements = extract_requirements(
@@ -702,6 +738,41 @@ def process_buyer_request(payload: BuyerRequestInput):
         requested_total = (
             price * requested_quantity
         )
+        
+        # --------------------------------------------------------
+        # Check mandate constraints for explicit request
+        # --------------------------------------------------------
+        max_order_amount = mandate.get("max_order_amount")
+        max_daily_spend = mandate.get("max_daily_spend")
+        
+        within_mandate_limit = True
+        within_daily_limit = True
+        
+        if max_order_amount is not None:
+            within_mandate_limit = requested_total <= max_order_amount
+        
+        if max_daily_spend is not None:
+            current_daily_spend = get_daily_spend(mandate["cart_id"])
+            within_daily_limit = (current_daily_spend + requested_total) <= max_daily_spend
+        
+        # Even for explicit requests, enforce mandate constraints
+        if not within_mandate_limit:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Requested product price ₹{price:,} exceeds "
+                    f"mandate order limit ₹{max_order_amount:,}."
+                ),
+            )
+        
+        if not within_daily_limit:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Requested product would exceed daily spending limit "
+                    f"₹{max_daily_spend:,}."
+                ),
+            )
 
         # --------------------------------------------------------
         # Calculate deterministic match score
@@ -780,6 +851,25 @@ def process_buyer_request(payload: BuyerRequestInput):
 
     if not requested_product_id:
 
+        # Get mandate constraints for bundle construction
+        max_order_amount = mandate.get("max_order_amount")
+        max_daily_spend = mandate.get("max_daily_spend")
+        
+        # Calculate remaining daily spend authority
+        remaining_daily = max_daily_spend if max_daily_spend else None
+        if max_daily_spend is not None:
+            current_daily_spend = get_daily_spend(mandate["cart_id"])
+            remaining_daily = max_daily_spend - current_daily_spend
+        
+        order_limit_str = f"₹{max_order_amount:,}" if max_order_amount else "unlimited"
+        daily_str = f"₹{remaining_daily:,}" if remaining_daily else "unlimited"
+        
+        trace.append({
+            "step": "Constructing authorized bundle",
+            "detail": f"User budget: ₹{budget:,}, Mandate order limit: {order_limit_str}, Daily remaining: {daily_str}",
+            "status": "completed"
+        })
+
         for item in catalog_items:
 
             # Maximum 3 generic recommendations
@@ -812,12 +902,23 @@ def process_buyer_request(payload: BuyerRequestInput):
             # ----------------------------------------------------
             # Only accept valid generic recommendations
             # ----------------------------------------------------
+            # Must satisfy BOTH user budget AND mandate constraints
+            within_user_budget = (current_subtotal + price) <= budget
+            within_mandate_limit = True
+            within_daily_limit = True
+            
+            if max_order_amount is not None:
+                within_mandate_limit = (current_subtotal + price) <= max_order_amount
+            
+            if remaining_daily is not None:
+                within_daily_limit = (current_subtotal + price) <= remaining_daily
+
             if (
                 stock > 0
                 and score["score"] >= 55
-                and (
-                    current_subtotal + price
-                ) <= budget
+                and within_user_budget
+                and within_mandate_limit
+                and within_daily_limit
             ):
 
                 recommended.append(
@@ -994,20 +1095,30 @@ def process_buyer_request(payload: BuyerRequestInput):
     # 8. DECISION TRACE
     # ============================================================
 
-    trace = [
-        {
-            "step": "Understanding requirements",
-            "detail": (
-                f"Parsed request: "
-                f"'{payload.request}' → "
-                f"Target Budget: ₹{budget:,}"
+    trace.append({
+        "step": "Understanding requirements",
+        "detail": (
+                f"User requested up to ₹{budget:,} "
+                f"for: '{payload.request}'"
             ),
-            "status": "ok",
-        },
+        "status": "ok",
+    })
 
-        {
-            "step": "Product identification",
-            "detail": (
+    order_limit_str = f"₹{mandate.get('max_order_amount'):,}" if mandate.get('max_order_amount') else "unlimited"
+    item_limit_str = f"₹{mandate.get('max_item_price'):,}" if mandate.get('max_item_price') else "unlimited"
+    
+    trace.append({
+        "step": "Loading buyer mandate",
+        "detail": (
+                f"Autonomous order authority: {order_limit_str}, "
+                f"Max item price: {item_limit_str}"
+            ),
+        "status": "ok",
+    })
+
+    trace.append({
+        "step": "Product identification",
+        "detail": (
                 f"Explicit product requested: "
                 f"{requested_product_id}"
                 if requested_product_id
@@ -1015,59 +1126,58 @@ def process_buyer_request(payload: BuyerRequestInput):
                 "No explicit product ID; "
                 "using compatibility-based recommendations."
             ),
-            "status": "ok",
-        },
+        "status": "ok",
+    })
 
-        {
-            "step": "Reading merchant catalog",
-            "detail": (
-                f"Evaluated "
-                f"{len(catalog_items)} products "
-                f"via GET /api/agent/catalog"
+    trace.append({
+        "step": "Filtering catalog against mandate",
+        "detail": (
+                f"Filtered {len(catalog_items) + len(ineligible_catalog)} products "
+                f"to {len(catalog_items)} individually eligible (price/category/stock)"
             ),
-            "status": "ok",
-        },
+        "status": "ok",
+    })
 
-        {
-            "step": "Checking inventory",
-            "detail": (
-                f"Verified in-stock status for "
-                f"{len(recommended)} selected item(s)"
+    trace.append({
+        "step": "Constructing authorized bundle",
+        "detail": (
+                f"Selected {len(recommended)} product(s) "
+                f"totaling ₹{current_subtotal:,.0f} "
+                f"within mandate order limit"
             ),
-            "status": "ok",
-        },
+        "status": "ok",
+    })
 
-        {
-            "step": "Budget validation",
-            "detail": (
-                f"Subtotal ₹{current_subtotal:,.0f} "
-                f"≤ ₹{budget:,}"
+    trace.append({
+        "step": "Budget validation",
+        "detail": (
+                f"User budget ₹{budget:,} "
+                f"vs. selected total ₹{current_subtotal:,.0f}"
             ),
-            "status": (
+        "status": (
                 "ok"
                 if current_subtotal <= budget
                 else "failed"
             ),
-        },
+    })
 
-        {
-            "step": "Buyer mandate validation",
-            "detail": mandate_result["status"],
-            "status": (
+    trace.append({
+        "step": "Buyer mandate validation",
+        "detail": mandate_result["status"],
+        "status": (
                 "ok"
                 if mandate_result["approved"]
                 else "failed"
             ),
-        },
+    })
 
-        {
-            "step": "Policy validation",
-            "detail": (
+    trace.append({
+        "step": "Policy validation",
+        "detail": (
                 "Action complies with AI Buyer limits"
             ),
-            "status": "ok",
-        },
-    ]
+        "status": "ok",
+    })
 
     # ============================================================
     # 9. AUDIT LOG
@@ -1120,6 +1230,10 @@ def process_buyer_request(payload: BuyerRequestInput):
         "requirements": requirements,
 
         "excluded_products": excluded,
+        
+        "eligible_products": len(eligible_catalog),
+        "ineligible_products": len(ineligible_catalog),
+        "ineligible_reasons": ineligible_catalog[:5],  # Include first 5 ineligible items with reasons
 
         "policy_status": (
             "APPROVED"
@@ -1588,18 +1702,6 @@ def approve_growth_request(
             ),
             total_value,
         )
-        
-        # Send notification for approval decision
-        try:
-            notification_service.send_approval_decision(
-                recipient_email="merchant@copperchar.com",  # In real app, get from user table
-                approval_id=approval_id,
-                decision="approved",
-                product_name=product["name"],
-                discount_pct=payload.approved_discount_pct
-            )
-        except Exception as e:
-            print(f"Failed to send approval notification: {e}")
 
         # ============================================================
         # 13. RETURN UPDATED CART
@@ -1620,6 +1722,18 @@ def approve_growth_request(
             "final_price": final_price,
             "cart": updated_cart,
         }
+
+    # Send notification asynchronously (outside transaction)
+    try:
+        notification_service.send_approval_decision(
+            recipient_email="merchant@copperchar.com",
+            approval_id=approval_id,
+            decision="approved",
+            product_name=product["name"],
+            discount_pct=payload.approved_discount_pct
+        )
+    except Exception as e:
+        print(f"[NOTIFICATION] Failed to send approval notification: {e}")
 @app.post("/api/growth/approvals/{approval_id}/reject")
 def reject_growth_request(approval_id: int, payload: MerchantRejectInput):
     with connect() as conn:
@@ -1917,7 +2031,7 @@ def run_agent(body: AgentInput):
             ).fetchone()
 
             print(
-                "🔎 EXISTING GROWTH APPROVAL:",
+                "EXISTING GROWTH APPROVAL:",
                 dict(existing) if existing else None
             )
 
@@ -2001,7 +2115,7 @@ def run_agent(body: AgentInput):
             ).fetchone()
 
             print(
-                "🔥 CREATED GROWTH APPROVAL:",
+                "CREATED GROWTH APPROVAL:",
                 dict(debug_row)
                 if debug_row
                 else None
@@ -2667,69 +2781,120 @@ def generate_receipt(order_id: str):
 def verify_checkout(body: VerifyInput):
     cart_id = body.cart_id
 
+    # ========================================================
+    # BASIC VALIDATION
+    # ========================================================
+
+    if not body.order_id:
+        return {
+            "verified": False,
+            "retry_available": True,
+            "error": "Missing Razorpay order ID."
+        }
+
+    if not body.payment_id:
+        return {
+            "verified": False,
+            "retry_available": True,
+            "error": "Missing Razorpay payment ID."
+        }
+
+    if not body.signature:
+        return {
+            "verified": False,
+            "retry_available": True,
+            "error": "Missing Razorpay payment signature."
+        }
+
+    # ========================================================
+    # VERIFY WITH RAZORPAY (BEFORE DB TRANSACTION)
+    # ========================================================
+    # This is an external API call and should NOT happen while
+    # holding a SQLite transaction open.
+
+    try:
+        verification = verify_payment(
+            body.order_id,
+            body.payment_id,
+            body.signature
+        )
+    except Exception as exc:
+        print(
+            "Checkout verification failed:",
+            type(exc).__name__,
+            str(exc)
+        )
+        return {
+            "verified": False,
+            "retry_available": True,
+            "error": "Razorpay payment verification failed."
+        }
+
+    # ========================================================
+    # EXTRACT VERIFIED RAZORPAY DATA
+    # ========================================================
+
+    razorpay_payment = verification["payment"]
+    razorpay_order = verification["order"]
+
+    actual_order_id = razorpay_order.get("id")
+    actual_order_amount = int(razorpay_order.get("amount", 0))
+    actual_payment_amount = int(razorpay_payment.get("amount", 0))
+    actual_currency = razorpay_payment.get("currency")
+
+    # ========================================================
+    # VERIFY ORDER ID
+    # ========================================================
+
+    if actual_order_id != body.order_id:
+        return {
+            "verified": False,
+            "retry_available": True,
+            "error": "Razorpay order ID mismatch."
+        }
+
+    # ========================================================
+    # VERIFY PAYMENT AMOUNT
+    # ========================================================
+
+    if actual_payment_amount != actual_order_amount:
+        return {
+            "verified": False,
+            "retry_available": True,
+            "error": "Payment amount does not match Razorpay order amount."
+        }
+
+    # ========================================================
+    # VERIFY PAYMENT STATUS
+    # ========================================================
+
+    if razorpay_payment.get("status") != "captured":
+        return {
+            "verified": False,
+            "retry_available": True,
+            "error": f"Payment was not captured. Current status: {razorpay_payment.get('status')}"
+        }
+
+    # ========================================================
+    # VERIFY CURRENCY
+    # ========================================================
+
+    if actual_currency != "INR":
+        return {
+            "verified": False,
+            "retry_available": True,
+            "error": "Payment currency is not INR."
+        }
+
+    # ========================================================
+    # NOW OPEN DB TRANSACTION FOR ORDER CREATION
+    # ========================================================
+    # The transaction should be as short as possible.
+    # Only the actual order insertion operations are inside.
+
     with connect() as conn:
 
-        # ========================================================
-        # RECOVERY HELPER
-        # ========================================================
-
-        def recover(reason):
-            try:
-                conn.execute(
-                    """
-                    UPDATE carts
-                    SET recovery_status='retry_available'
-                    WHERE id=?
-                    """,
-                    (cart_id,)
-                )
-            except Exception:
-                pass
-
-            log(
-                conn,
-                cart_id,
-                "Execute",
-                "blocked",
-                reason
-            )
-
-            log(
-                conn,
-                cart_id,
-                "Recover",
-                "ok",
-                "Cart preserved; retry with a different payment method is available."
-            )
-            
-            # Send payment failure notification
-            try:
-                notification_service.send_payment_failure(
-                    recipient_email="buyer@copperchar.com",
-                    cart_id=cart_id,
-                    amount=cart.get("total", 0),
-                    reason=reason
-                )
-            except Exception as e:
-                print(f"Failed to send payment failure notification: {e}")
-
-            return {
-                "verified": False,
-                "retry_available": True
-            }
-
-        # ========================================================
-        # BASIC VALIDATION
-        # ========================================================
-
-        if not body.order_id:
-            return recover("Missing Razorpay order ID.")
-
-        if not body.payment_id:
-            return recover("Missing Razorpay payment ID.")
-
-        if not body.signature:
-            return recover("Missing Razorpay payment signature.")
+        print("[DB DEBUG] BEGIN checkout transaction")
 
         # ========================================================
         # FETCH CART
@@ -2738,10 +2903,25 @@ def verify_checkout(body: VerifyInput):
         cart = cart_data(conn, cart_id)
 
         if not cart or cart["total"] <= 0:
-            return recover("Cart is empty or no longer available.")
+            return {
+                "verified": False,
+                "retry_available": True,
+                "error": "Cart is empty or no longer available."
+            }
 
         expected_amount_inr = int(cart["total"])
         expected_amount_paise = expected_amount_inr * 100
+
+        # ========================================================
+        # VERIFY AGAINST CURRENT CART
+        # ========================================================
+
+        if actual_order_amount != expected_amount_paise:
+            return {
+                "verified": False,
+                "retry_available": True,
+                "error": "Payment amount does not match the current cart amount."
+            }
 
         # ========================================================
         # IDEMPOTENCY CHECK
@@ -2793,94 +2973,14 @@ def verify_checkout(body: VerifyInput):
                     }
                 }
 
-            return recover(
-                "This Razorpay payment has already been associated with an existing order."
-            )
+            return {
+                "verified": False,
+                "retry_available": False,
+                "error": "This Razorpay payment has already been associated with an existing order."
+            }
 
         # ========================================================
-        # VERIFY WITH RAZORPAY
-        # ========================================================
-
-        try:
-
-            verification = verify_payment(
-                body.order_id,
-                body.payment_id,
-                body.signature
-            )
-
-        except Exception as exc:
-
-            print(
-                "Checkout verification failed:",
-                type(exc).__name__,
-                str(exc)
-            )
-
-            return recover(
-                "Razorpay payment verification failed."
-            )
-
-        # ========================================================
-        # EXTRACT VERIFIED RAZORPAY DATA
-        # ========================================================
-
-        razorpay_payment = verification["payment"]
-        razorpay_order = verification["order"]
-
-        actual_order_id = razorpay_order.get("id")
-        actual_order_amount = int(razorpay_order.get("amount", 0))
-        actual_payment_amount = int(razorpay_payment.get("amount", 0))
-        actual_currency = razorpay_payment.get("currency")
-
-        # ========================================================
-        # VERIFY ORDER ID
-        # ========================================================
-
-        if actual_order_id != body.order_id:
-            return recover(
-                "Razorpay order ID mismatch."
-            )
-
-        # ========================================================
-        # VERIFY PAYMENT AMOUNT
-        # ========================================================
-
-        if actual_payment_amount != actual_order_amount:
-            return recover(
-                "Payment amount does not match Razorpay order amount."
-            )
-
-        # ========================================================
-        # VERIFY AGAINST CURRENT CART
-        # ========================================================
-
-        if actual_order_amount != expected_amount_paise:
-            return recover(
-                "Payment amount does not match the current cart amount."
-            )
-
-        # ========================================================
-        # VERIFY CURRENCY
-        # ========================================================
-
-        if actual_currency != "INR":
-            return recover(
-                "Payment currency is not INR."
-            )
-
-        # ========================================================
-        # VERIFY PAYMENT STATUS
-        # ========================================================
-
-        if razorpay_payment.get("status") != "captured":
-            return recover(
-                f"Payment was not captured. "
-                f"Current status: {razorpay_payment.get('status')}"
-            )
-
-        # ========================================================
-        # EVERYTHING VERIFIED
+        # EVERYTHING VERIFIED - CREATE ORDER
         # ========================================================
 
         paid_amount = expected_amount_inr
@@ -2888,6 +2988,8 @@ def verify_checkout(body: VerifyInput):
         order_db_id = f"ord_{uuid4().hex[:10]}"
         order_number = f"CC-{uuid4().hex[:6].upper()}"
         created_at = now()
+
+        print("[DB DEBUG] inserting order")
 
         # ========================================================
         # RECORD ORDER
@@ -2934,6 +3036,8 @@ def verify_checkout(body: VerifyInput):
             # ====================================================
             # RECORD ORDER ITEMS
             # ====================================================
+
+            print("[DB DEBUG] inserting order_items")
 
             for item in cart["items"]:
 
@@ -2998,6 +3102,8 @@ def verify_checkout(body: VerifyInput):
         # CLEAR CART ONLY AFTER ORDER RECORDING SUCCEEDS
         # ========================================================
 
+        print("[DB DEBUG] clearing cart")
+
         conn.execute(
             "DELETE FROM cart_items WHERE cart_id=?",
             (cart_id,)
@@ -3025,38 +3131,58 @@ def verify_checkout(body: VerifyInput):
             "Payment completed and cart cleared successfully.",
             paid_amount
         )
-        
-        # Send order confirmation notification
-        try:
-            notification_service.send_order_confirmation(
-                recipient_email="buyer@copperchar.com",
-                order_id=order_db_id,
-                order_number=order_number,
-                amount=paid_amount,
-                items=cart["items"]
-            )
-        except Exception as e:
-            print(f"Failed to send order confirmation notification: {e}")
 
-        # ========================================================
-        # RESPONSE
-        # ========================================================
+        print("[DB DEBUG] committing checkout transaction")
 
-        return {
-            "verified": True,
-            "already_processed": False,
-            "receipt": {
-                "order_id": order_db_id,
-                "order_number": order_number,
-                "payment_id": body.payment_id,
-                "razorpay_order_id": body.order_id,
-                "cart_id": cart_id,
-                "amount": paid_amount,
-                "currency": "INR",
-                "status": "PAID",
-                "created_at": created_at
-            }
+        # Transaction commits automatically when `with connect()` exits
+
+    print("[DB DEBUG] checkout transaction committed")
+    print("[DB DEBUG] connection closed")
+
+    # ========================================================
+    # NOTIFICATION (AFTER TRANSACTION COMMITS)
+    # ========================================================
+    # Notification happens outside the transaction to avoid
+    # nested SQLite writes and lock conflicts.
+
+    try:
+        notification_service.send_order_confirmation(
+            recipient_email="buyer@copperchar.com",
+            order_id=order_db_id,
+            order_number=order_number,
+            amount=paid_amount,
+            items=cart["items"]
+        )
+    except Exception as e:
+        print(f"[NOTIFICATION] Failed to send order confirmation notification: {e}")
+
+    # ========================================================
+    # RESPONSE
+    # ========================================================
+
+    return {
+        "verified": True,
+        "already_processed": False,
+        "receipt": {
+            "order_id": order_db_id,
+            "order_number": order_number,
+            "payment_id": body.payment_id,
+            "razorpay_order_id": body.order_id,
+            "cart_id": cart_id,
+            "amount": paid_amount,
+            "currency": "INR",
+            "status": "PAID",
+            "created_at": created_at
         }
+    }
+@app.post("/api/cart/{cart_id}/clear")
+def clear_cart(cart_id: str):
+    with connect() as conn:
+        conn.execute("DELETE FROM cart_items WHERE cart_id=?", (cart_id,))
+        conn.execute("UPDATE carts SET discount_pct=0 WHERE id=?", (cart_id,))
+        log(conn, cart_id, "CART", "CLEARED", "Cart cleared by user", 0)
+    return {"status": "cleared", "cart_id": cart_id}
+
 @app.post("/api/checkout/{cart_id}")
 def checkout(cart_id: str):
     with connect() as conn:
@@ -3086,7 +3212,10 @@ def checkout(cart_id: str):
 
             raise HTTPException(
                 status_code=403,
-                detail="Checkout blocked: no active buyer mandate found."
+                detail={
+                    "code": "NO_MANDATE",
+                    "message": "Checkout blocked: no active buyer mandate found. Please create a buyer mandate with auto-pay enabled."
+                }
             )
 
         # ============================================================
@@ -3139,7 +3268,8 @@ def checkout(cart_id: str):
             raise HTTPException(
                 status_code=403,
                 detail={
-                    "message": "Checkout requires approval.",
+                    "code": "MANDATE_VALIDATION_FAILED",
+                    "message": "Checkout is not authorized by the active buyer mandate.",
                     "status": mandate_result["status"],
                     "violations": mandate_result["violations"],
                     "mandate_id": mandate["id"],

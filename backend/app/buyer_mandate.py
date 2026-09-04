@@ -383,8 +383,8 @@ def validate_mandate(
         and amount > max_order_amount
     ):
         violations.append(
-            f"Order amount ₹{amount:,} exceeds "
-            f"mandate limit ₹{max_order_amount:,}."
+            f"Order amount INR {amount:,} exceeds "
+            f"mandate limit INR {max_order_amount:,}."
         )
 
     # --------------------------------------------------------
@@ -401,8 +401,8 @@ def validate_mandate(
 
             if price > max_item_price:
                 violations.append(
-                    f"Item price ₹{price:,} exceeds "
-                    f"mandate item limit ₹{max_item_price:,}."
+                    f"Item price INR {price:,} exceeds "
+                    f"mandate item limit INR {max_item_price:,}."
                 )
 
     # --------------------------------------------------------
@@ -437,10 +437,10 @@ def validate_mandate(
         ):
             violations.append(
                 f"Daily spending limit exceeded. "
-                f"Already spent ₹{current_daily_spend:,}; "
+                f"Already spent INR {current_daily_spend:,}; "
                 f"this order would reach "
-                f"₹{current_daily_spend + amount:,}, "
-                f"while the limit is ₹{max_daily_spend:,}."
+                f"INR {current_daily_spend + amount:,}, "
+                f"while the limit is INR {max_daily_spend:,}."
             )
 
     # --------------------------------------------------------
@@ -460,3 +460,105 @@ def validate_mandate(
         "status": "MANDATE_APPROVED",
         "violations": [],
     }
+
+
+# ============================================================
+# FILTER CATALOG AGAINST MANDATE
+# ============================================================
+
+def filter_catalog_by_mandate(
+    catalog_items: list[dict],
+    mandate: dict,
+    current_cart_total: int = 0
+) -> tuple[list[dict], list[dict]]:
+    """
+    Filter catalog items to only those that can be purchased under the mandate.
+    
+    Returns:
+        (eligible_items, ineligible_items)
+    """
+    
+    eligible = []
+    ineligible = []
+    
+    max_order_amount = mandate.get("max_order_amount")
+    max_item_price = mandate.get("max_item_price")
+    allowed_categories = mandate.get("allowed_categories") or []
+    max_daily_spend = mandate.get("max_daily_spend")
+    
+    # Get current daily spend if daily limit is configured
+    current_daily_spend = 0
+    if max_daily_spend is not None:
+        current_daily_spend = get_daily_spend(mandate["cart_id"])
+    
+    # Normalize allowed categories for comparison
+    allowed_normalized = {
+        str(cat).strip().lower() 
+        for cat in allowed_categories
+    } if allowed_categories else None
+    
+    for item in catalog_items:
+        price = float(
+            item.get("price") if item.get("price") is not None 
+            else item.get("price_inr", 0)
+        )
+        
+        category = str(item.get("category") or "").strip().lower()
+        stock = int(item.get("stock", 0) or 0)
+        
+        # Check each constraint
+        reasons = []
+        
+        # Stock check
+        if stock <= 0:
+            reasons.append("OUT_OF_STOCK")
+        
+        # Max item price check
+        if max_item_price is not None and price > max_item_price:
+            reasons.append(f"ITEM_PRICE_EXCEEDS_LIMIT_{max_item_price}")
+        
+        # Category check - use partial matching for flexibility
+        if allowed_normalized:
+            category_allowed = False
+            for allowed_cat in allowed_normalized:
+                # Check if allowed category is contained in product category or vice versa
+                if allowed_cat in category or category in allowed_cat:
+                    category_allowed = True
+                    break
+            if not category_allowed:
+                reasons.append(f"CATEGORY_NOT_ALLOWED_{category}")
+        
+        # Max order amount check (considering current cart)
+        if max_order_amount is not None:
+            potential_total = current_cart_total + price
+            if potential_total > max_order_amount:
+                reasons.append(f"WOULD_EXCEED_ORDER_LIMIT_{max_order_amount}")
+        
+        # Daily spending check
+        if max_daily_spend is not None:
+            potential_daily = current_daily_spend + price
+            if potential_daily > max_daily_spend:
+                reasons.append(f"WOULD_EXCEED_DAILY_LIMIT_{max_daily_spend}")
+        
+        # Check expiration
+        valid_expiry, expiry_reason = check_expiration(mandate)
+        if not valid_expiry:
+            reasons.append("MANDATE_EXPIRED")
+        
+        # Check if mandate is enabled
+        if not mandate.get("enabled"):
+            reasons.append("MANDATE_DISABLED")
+        
+        # Check if auto-pay is enabled
+        if not mandate.get("auto_pay_enabled"):
+            reasons.append("AUTO_PAY_DISABLED")
+        
+        if reasons:
+            ineligible.append({
+                **item,
+                "ineligibility_reasons": reasons
+            })
+        else:
+            eligible.append(item)
+    
+    return eligible, ineligible

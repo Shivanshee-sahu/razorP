@@ -345,16 +345,19 @@ export default function CheckoutModal({
 
           } catch (error) {
 
+            console.error('Payment verification error:', error);
+
             setState('error');
 
             setMessage(
               'Payment verification failed'
             );
 
-            setDetail(
-              error.message ||
-              'The payment was received, but verification could not be completed.'
-            );
+            const errorDetail = error.detail || error.message || 
+              'The payment was received, but verification could not be completed. ' +
+              'Your payment has been preserved for manual reconciliation.';
+
+            setDetail(errorDetail);
           }
         },
 
@@ -402,16 +405,32 @@ export default function CheckoutModal({
 
     } catch (error) {
 
+      console.error('Checkout modal error:', error);
+
       setState('error');
 
       setMessage(
         'Checkout could not be opened'
       );
 
-      setDetail(
-        error.message ||
-        'Something went wrong while opening Razorpay Checkout.'
-      );
+      // Extract error detail from structured error responses
+      let errorDetail = 'Something went wrong while opening Razorpay Checkout.';
+      
+      if (error.detail) {
+        if (typeof error.detail === 'string') {
+          errorDetail = error.detail;
+        } else if (typeof error.detail === 'object') {
+          errorDetail = error.detail.message || 
+                        error.detail.code || 
+                        JSON.stringify(error.detail);
+        }
+      } else if (error.message) {
+        errorDetail = error.message;
+      } else if (typeof error === 'object') {
+        errorDetail = JSON.stringify(error);
+      }
+
+      setDetail(errorDetail);
     }
   };
 

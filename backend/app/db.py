@@ -157,9 +157,39 @@ CREATE TABLE IF NOT EXISTS discount_rules (
 
 def connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    # Enable WAL mode for better concurrency
+    conn.execute("PRAGMA journal_mode=WAL")
+    # Set busy timeout to handle concurrent access
+    conn.execute("PRAGMA busy_timeout=30000")
+    # Set synchronous to NORMAL for better performance while maintaining safety
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
+
+
+def retry_on_lock(func, max_retries=5, initial_delay=0.1):
+    """
+    Retry helper for transient SQLite lock errors.
+    """
+    import time
+    
+    def wrapper(*args, **kwargs):
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                return func(*args, **kwargs)
+            except sqlite3.OperationalError as e:
+                last_error = e
+                if "database is locked" in str(e) or "database is busy" in str(e):
+                    if attempt < max_retries - 1:
+                        delay = initial_delay * (2 ** attempt)
+                        print(f"[DB] SQLite locked, retry {attempt + 1}/{max_retries} (delay: {delay:.2f}s)")
+                        time.sleep(delay)
+                        continue
+                raise
+        raise last_error
+    return wrapper
 
 def seed() -> None:
     with connect() as conn:

@@ -11,7 +11,7 @@ from typing import Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from app.db import connect
+from app.db import connect, retry_on_lock
 
 
 class NotificationEventType(str, Enum):
@@ -104,12 +104,12 @@ class NotificationService:
             print("[NOTIFICATION] Using console provider (email not configured)")
             self.provider = ConsoleNotificationProvider()
     
+    @retry_on_lock
     def _store_event(self, event: NotificationEvent):
         """Store notification event in database."""
-        try:
-            with connect() as conn:
-                conn.execute(
-                    """
+        with connect() as conn:
+            conn.execute(
+                """
                     INSERT INTO notification_events 
                     (event_type, recipient_email, subject, body, metadata, created_at)
                     VALUES (?, ?, ?, ?, ?, ?)
@@ -122,9 +122,7 @@ class NotificationService:
                         str(event.metadata),
                         event.created_at
                     )
-                )
-        except Exception as e:
-            print(f"[NOTIFICATION] Failed to store event: {e}")
+            )
     
     def send_approval_decision(
         self,
