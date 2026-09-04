@@ -322,36 +322,17 @@ export default function AgentPanel({
 
                         {/* PENDING / INPUT FORM */}
                         {status === 'PENDING' && (
-                          <div className="discount-input-group">
-                            <label className="discount-request">
-                              <span>Requested discount</span>
-                              <div className="discount-field">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={maxDiscountPct}
-                                  value={requested}
-                                  onChange={(event) =>
-                                    setDiscountRequests((previous) => ({
-                                      ...previous,
-                                      [productId]: event.target.value,
-                                    }))
-                                  }
-                                />
-                                <span className="unit">%</span>
-                              </div>
-                            </label>
+  <div className="requested-wrapper">
+    <span className="discount-requested">
+      ⏳ Merchant Approval Pending
+    </span>
 
-                            <button
-                              type="button"
-                              className="addon-select-button"
-                              disabled={locallyPending}
-                              onClick={() => handleRequestDiscount(addon)}
-                            >
-                              Request Discount
-                            </button>
-                          </div>
-                        )}
+    <small className="addon-helper-text">
+      This recommendation has been sent to the merchant.
+      The product will be added to the cart only after merchant approval.
+    </small>
+  </div>
+)}
 
                         {/* REQUESTED */}
                         {status === 'REQUESTED' && (

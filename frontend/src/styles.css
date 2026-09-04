@@ -4362,6 +4362,22 @@ a {
   border-radius: 6px;
   flex-shrink: 0;
 }
+.approval-product-info {
+  margin-top: 6px;
+}
+
+.approval-product-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.approval-product-id {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  opacity: 0.6;
+}
 
 .merchant-product-main h3 {
   margin: 0;

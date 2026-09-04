@@ -9,6 +9,11 @@ import CheckoutModal from './components/CheckoutModal';
 import AgentFlow from './components/AgentFlow';
 import AgentActivityFeed from './components/AgentActivityFeed';
 import MerchantCatalog from './components/MerchantCatalog';
+import OrderHistory from './components/OrderHistory';
+import SavedCarts from './components/SavedCarts';
+import Wishlist from './components/Wishlist';
+import Reviews from './components/Reviews';
+import Support from './components/Support';
 
 const CART_ID = 'demo-cart';
 
@@ -108,10 +113,18 @@ export default function App() {
     'revenue',
     'policies',
     'audit',
+    'saved-carts',
+    'wishlist',
+    'reviews',
+    'support',
+    'analytics',
+    'segments',
+    'discount-rules',
+    'settings',
   ];
 
-  const buyerPages = new Set(['buyer', 'products', 'cart', 'growth-ai', 'orders']);
-  const merchantPages = new Set(['dashboard', 'catalog', 'approvals', 'orders', 'revenue', 'policies', 'audit']);
+  const buyerPages = new Set(['buyer', 'products', 'cart', 'growth-ai', 'orders', 'saved-carts', 'wishlist', 'reviews', 'support']);
+  const merchantPages = new Set(['dashboard', 'catalog', 'approvals', 'orders', 'revenue', 'policies', 'audit', 'analytics', 'segments', 'discount-rules', 'settings']);
 
   const pageForExperience = (page, role = experience) => {
     if (role === 'buyer' && !buyerPages.has(page)) return 'buyer';
@@ -249,18 +262,42 @@ const downloadReceipt = async (orderId) => {
       setAgent((previous) => {
         const recovered = previous || (growthRecommendationData?.addons?.length ? growthRecommendationData : null);
         if (!recovered) return previous;
-        const statuses = new Map((growthApprovals || []).map((item) => [item.product_id, item]));
-        return {
-          ...recovered,
-          cart: currentCart,
-          addons: (recovered.addons || []).map((addon) => ({
-            ...addon,
-            approval_status: statuses.get(addon.product_id)?.status || addon.approval_status || 'NOT_REQUESTED',
-            approved_discount_pct: statuses.get(addon.product_id)?.merchant_approved_discount_pct,
-            final_price: statuses.get(addon.product_id)?.final_price,
-            requested_discount_pct: statuses.get(addon.product_id)?.buyer_requested_discount_pct ?? addon.requested_discount_pct,
-          })),
-        };
+       const approvalsById = new Map(
+  (growthApprovals || []).map((item) => [
+    String(item.id),
+    item,
+  ])
+);
+
+return {
+  ...recovered,
+  cart: currentCart,
+  addons: (recovered.addons || []).map((addon) => {
+    const approval = addon.approval_id
+  ? approvalsById.get(String(addon.approval_id))
+  : null;
+
+    return {
+      ...addon,
+
+      // IMPORTANT:
+      // Never trust an old approval_status from a previous agent run.
+      approval_status: approval?.status || 'PENDING',
+
+      approved_discount_pct:
+        approval?.merchant_approved_discount_pct ?? null,
+
+      final_price:
+        approval?.final_price ?? null,
+
+      requested_discount_pct:
+        approval?.buyer_requested_discount_pct ??
+        addon.requested_discount_pct ??
+        addon.discount_pct ??
+        0,
+    };
+  }),
+};
       });
 
       setApprovals(
@@ -710,70 +747,143 @@ const downloadReceipt = async (orderId) => {
   };
 
   // ============================================================
-  // APPROVAL DECISION
-  // ============================================================
+// APPROVAL DECISION
+// ============================================================
+const handleApprovalDecision = async (
+  id,
+  decision,
+  approvalRow
+) => {
+  try {
+    const isGrowthApproval =
+      approvalRow?.kind === 'growth_item';
 
-  const handleApprovalDecision = async (
-    id,
-    decision,
-    approvalRow
-  ) => {
-    try {
-      const decisionResult = await api(
-        approvalRow?.kind === 'growth_item'
-          ? `/api/growth/approvals/${id}/${decision}`
-          : `/api/approvals/${id}/${decision}`,
-        {
-          method: 'POST',
-          body: approvalRow?.kind === 'growth_item'
-            ? JSON.stringify(decision === 'approve' ? { approved_discount_pct: approvalRow.buyer_requested_discount_pct || 0 } : { reason: 'Rejected by merchant.' })
-            : undefined,
-        }
-      );
+    const approvedDiscount =
+      approvalRow?.approved_discount_pct ??
+      approvalRow?.buyer_requested_discount_pct ??
+      0;
 
-      if (decisionResult.cart) {
-        setCart(decisionResult.cart);
+    const decisionResult = await api(
+      isGrowthApproval
+        ? `/api/growth/approvals/${id}/${decision}`
+        : `/api/approvals/${id}/${decision}`,
+      {
+        method: 'POST',
+        body: isGrowthApproval
+          ? JSON.stringify(
+              decision === 'approve'
+                ? {
+                    approved_discount_pct:
+                      approvedDiscount,
+                  }
+                : {
+                    reason:
+                      'Rejected by merchant.',
+                  }
+            )
+          : undefined,
+      }
+    );
+
+    // ==========================================================
+    // UPDATE CART
+    // ==========================================================
+
+    if (decisionResult.cart) {
+      setCart(decisionResult.cart);
+    }
+
+    // ==========================================================
+    // UPDATE AGENT RESULT
+    // ==========================================================
+
+    setAgent((previous) => {
+      if (!previous) {
+        return previous;
       }
 
-      await refresh();
+      const updatedAddons = (
+        previous.addons || []
+      ).map((addon) => {
 
-      setAgent((previous) => {
-        if (!previous) {
-          return previous;
+        // IMPORTANT:
+        // Match the exact approval request,
+        // NOT just the product.
+        if (
+          String(addon.approval_id) !==
+          String(id)
+        ) {
+          return addon;
         }
 
         return {
-          ...previous,
-          gate: {
-            ...(previous.gate || {}),
-            status:
-              decision === 'approve'
-                ? 'approved'
-                : 'rejected',
-          },
-          outcome: {
-            ...(previous.outcome || {}),
-            status: decision === 'approve' ? 'executed' : 'rejected',
-          },
+          ...addon,
+
+          approval_status:
+            decision === 'approve'
+              ? 'APPROVED'
+              : 'REJECTED',
+
+          approved_discount_pct:
+            decision === 'approve'
+              ? approvedDiscount
+              : null,
+
+          final_price:
+            decision === 'approve'
+              ? (
+                  decisionResult.final_price ??
+                  addon.final_price ??
+                  addon.product?.price
+                )
+              : null,
         };
       });
-    } catch (e) {
-      console.error(
-        'APPROVAL ERROR:',
-        e
-      );
 
-      setError(
-        e.message ||
-          'Unable to process approval.'
-      );
-    }
-  };
+      return {
+        ...previous,
 
-  // ============================================================
-  // GET RECEIPT
-  // ============================================================
+        addons: updatedAddons,
 
+        // IMPORTANT:
+        // Don't blindly make the entire proposal
+        // approved/rejected if there are multiple addons.
+        gate: {
+          ...(previous.gate || {}),
+          status:
+            decision === 'approve'
+              ? 'approved'
+              : 'rejected',
+        },
+
+        outcome: {
+          ...(previous.outcome || {}),
+          status:
+            decision === 'approve'
+              ? 'executed'
+              : 'rejected',
+        },
+      };
+    });
+
+    // ==========================================================
+    // REFRESH BACKEND DATA
+    // ==========================================================
+
+    await refresh();
+
+  } catch (e) {
+    console.error(
+      'APPROVAL ERROR:',
+      e
+    );
+
+    setError(
+      e.message ||
+      'Unable to process approval.'
+    );
+  }
+};
 const viewReceipt = (orderId) => {
   if (!orderId) {
     console.error("Receipt error: Order ID is missing");
@@ -959,9 +1069,57 @@ const viewReceipt = (orderId) => {
     },
 
     {
+      key: 'saved-carts',
+      label: 'Saved Carts',
+      icon: '💾',
+    },
+
+    {
+      key: 'wishlist',
+      label: 'Wishlist',
+      icon: '❤',
+    },
+
+    {
+      key: 'reviews',
+      label: 'Reviews',
+      icon: '★',
+    },
+
+    {
+      key: 'support',
+      label: 'Support',
+      icon: '💬',
+    },
+
+    {
       key: 'revenue',
       label: 'Revenue',
       icon: '₹',
+    },
+
+    {
+      key: 'analytics',
+      label: 'Analytics',
+      icon: '📊',
+    },
+
+    {
+      key: 'segments',
+      label: 'Segments',
+      icon: '👥',
+    },
+
+    {
+      key: 'discount-rules',
+      label: 'Discount Rules',
+      icon: '📋',
+    },
+
+    {
+      key: 'settings',
+      label: 'Settings',
+      icon: '⚙',
     },
 
     {
@@ -2236,56 +2394,10 @@ const viewReceipt = (orderId) => {
           )}
 
           {activePage === 'orders' && (
-  <div className="page-view">
-    <section className="cart-panel">
-      {/* HEADER WRAPPER */}
-      <header className="orders-header">
-        <span className="section-kicker">TRANSACTIONS</span>
-        <h2 className="orders-title">Orders</h2>
-      </header>
-
-      {!orders.length ? (
-        <div className="empty-state">No orders yet.</div>
-      ) : (
-        <div className="orders-list">
-          {orders.map((order, index) => {
-            const id = order.id || order.order_id || `order-${index}`;
-            const amount = order.amount ?? order.total ?? 0;
-            const status = order.status || 'Completed';
-
-            return (
-              <article className="order-row" key={id}>
-                {/* Order Details */}
-                <div className="order-info">
-                  <span className="order-label">Order</span>
-                  <strong className="order-id">
-                    #{order.id || order.order_id}
-                  </strong>
-                  <span className="order-status">{status}</span>
-                </div>
-
-                {/* Amount */}
-                <div className="order-amount">
-                  <span className="amount-label">Amount</span>
-                  <strong>{money(amount)}</strong>
-                </div>
-
-                {/* Download Button */}
-                <button
-                  type="button"
-                  className="receipt-download-btn"
-                  onClick={() => downloadReceipt(order.id)}
-                >
-                  Download Receipt
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  </div>
-)}
+            <div className="page-view">
+              <OrderHistory cartId={CART_ID} />
+            </div>
+          )}
 
         {/* ==================================================
     REVENUE
@@ -3036,9 +3148,144 @@ const viewReceipt = (orderId) => {
                     )}
                   </pre>
                 )}
-
               </section>
+            </div>
+          )}
 
+          {/* NEW BUYER PAGES */}
+          {activePage === 'saved-carts' && (
+            <div className="page-view">
+              <SavedCarts cartId={CART_ID} />
+            </div>
+          )}
+
+          {activePage === 'wishlist' && (
+            <div className="page-view">
+              <Wishlist cartId={CART_ID} catalog={catalog} />
+            </div>
+          )}
+
+          {activePage === 'reviews' && (
+            <div className="page-view">
+              <Reviews cartId={CART_ID} orders={orders} />
+            </div>
+          )}
+
+          {activePage === 'support' && (
+            <div className="page-view">
+              <Support cartId={CART_ID} />
+            </div>
+          )}
+
+          {/* NEW MERCHANT PAGES */}
+          {activePage === 'analytics' && (
+            <div className="page-view">
+              <section className="cart-panel">
+                <header className="orders-header">
+                  <span className="section-kicker">ANALYTICS</span>
+                  <h2 className="orders-title">Sales Analytics</h2>
+                </header>
+                <div className="analytics-dashboard">
+                  <div className="analytics-card">
+                    <h3>Total Revenue</h3>
+                    <p className="analytics-value">{money(revenue?.total_test_revenue || 0)}</p>
+                  </div>
+                  <div className="analytics-card">
+                    <h3>Orders</h3>
+                    <p className="analytics-value">{orders.length}</p>
+                  </div>
+                  <div className="analytics-card">
+                    <h3>Average Order Value</h3>
+                    <p className="analytics-value">{money(revenue?.average_order_value || 0)}</p>
+                  </div>
+                  <div className="analytics-card">
+                    <h3>AI Revenue</h3>
+                    <p className="analytics-value">{money(revenue?.ai_assisted_revenue || 0)}</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activePage === 'segments' && (
+            <div className="page-view">
+              <section className="cart-panel">
+                <header className="orders-header">
+                  <span className="section-kicker">CUSTOMER INSIGHTS</span>
+                  <h2 className="orders-title">Customer Segments</h2>
+                </header>
+                <div className="segments-dashboard">
+                  <div className="segment-card">
+                    <h3>High Value</h3>
+                    <p>Customers with total spend &gt; ₹10,000</p>
+                  </div>
+                  <div className="segment-card">
+                    <h3>Frequent Buyers</h3>
+                    <p>Customers with 5+ orders</p>
+                  </div>
+                  <div className="segment-card">
+                    <h3>New Customers</h3>
+                    <p>First-time purchasers</p>
+                  </div>
+                  <div className="segment-card">
+                    <h3>Growth Responsive</h3>
+                    <p>Customers who accepted AI recommendations</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activePage === 'discount-rules' && (
+            <div className="page-view">
+              <section className="cart-panel">
+                <header className="orders-header">
+                  <span className="section-kicker">AUTOMATION</span>
+                  <h2 className="orders-title">Discount Rules</h2>
+                </header>
+                <div className="discount-rules-panel">
+                  <p>Configure automatic discount approval rules</p>
+                  <div className="rule-example">
+                    <h4>Example Rule:</h4>
+                    <p>IF discount ≤ 5% AND addon value ≤ ₹2000 THEN auto-approve</p>
+                  </div>
+                  <button className="primary-button">Add New Rule</button>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activePage === 'settings' && (
+            <div className="page-view">
+              <section className="cart-panel">
+                <header className="orders-header">
+                  <span className="section-kicker">CONFIGURATION</span>
+                  <h2 className="orders-title">Growth Agent Settings</h2>
+                </header>
+                <div className="settings-panel">
+                  <div className="setting-item">
+                    <label>Maximum Add-ons</label>
+                    <input type="number" defaultValue={3} min="1" max="10" />
+                  </div>
+                  <div className="setting-item">
+                    <label>Maximum Discount (%)</label>
+                    <input type="number" defaultValue={15} min="0" max="50" />
+                  </div>
+                  <div className="setting-item">
+                    <label>Maximum Cart Increase (%)</label>
+                    <input type="number" defaultValue={30} min="0" max="100" />
+                  </div>
+                  <div className="setting-item">
+                    <label>Preferred Categories</label>
+                    <select multiple>
+                      <option>Cookware</option>
+                      <option>Knives</option>
+                      <option>Utensils</option>
+                    </select>
+                  </div>
+                  <button className="primary-button">Save Settings</button>
+                </div>
+              </section>
             </div>
           )}
 

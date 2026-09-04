@@ -11,8 +11,18 @@ class AgentPermission(str, Enum):
     PAYMENT = "PAYMENT"
 
 POLICY_CONFIG = {
-    "auto_approval_threshold": 2000,
-    "max_discount_pct": 10,
+     "max_discount_pct": 15,
+    "max_auto_approve_amount": 2000,
+
+    "allowed_actions": [
+        "suggest_addon",
+        "apply_discount",
+        "create_order"
+    ],
+
+    "requires_human_approval_above": 2000,
+
+    # Existing controls
     "max_ai_addons": 3,
     "max_cart_increase_pct": 30
 }

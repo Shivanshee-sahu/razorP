@@ -28,6 +28,28 @@ CREATE TABLE IF NOT EXISTS catalog (
     max_ai_discount_pct REAL NOT NULL DEFAULT 10,
     max_recommended_qty INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS buyer_mandates (
+    id TEXT PRIMARY KEY,
+    cart_id TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+
+    max_order_amount INTEGER NOT NULL,
+    max_item_price INTEGER,
+
+    max_daily_spend INTEGER,
+
+    allowed_categories TEXT,
+
+    auto_pay_enabled INTEGER NOT NULL DEFAULT 0,
+
+    expires_at TEXT,
+
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_buyer_mandates_cart
+ON buyer_mandates(cart_id);
 CREATE TABLE IF NOT EXISTS carts (id TEXT PRIMARY KEY, created_at TEXT NOT NULL, discount_pct REAL NOT NULL DEFAULT 0, recovery_status TEXT);
 CREATE TABLE IF NOT EXISTS cart_items (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT NOT NULL REFERENCES carts(id), product_id TEXT NOT NULL REFERENCES catalog(id), qty INTEGER NOT NULL DEFAULT 1, unit_price INTEGER, UNIQUE(cart_id, product_id));
 CREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, cart_id TEXT, stage TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, amount INTEGER, created_at TEXT NOT NULL);
@@ -73,6 +95,64 @@ CREATE TABLE IF NOT EXISTS order_items (
     qty INTEGER NOT NULL DEFAULT 1,
     price INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notification_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    recipient_email TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    metadata TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS saved_carts (
+    id TEXT PRIMARY KEY,
+    cart_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS saved_cart_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    saved_cart_id TEXT NOT NULL REFERENCES saved_carts(id),
+    product_id TEXT NOT NULL REFERENCES catalog(id),
+    qty INTEGER NOT NULL DEFAULT 1,
+    unit_price INTEGER,
+    UNIQUE(saved_cart_id, product_id)
+);
+CREATE TABLE IF NOT EXISTS wishlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cart_id TEXT NOT NULL,
+    product_id TEXT NOT NULL REFERENCES catalog(id),
+    created_at TEXT NOT NULL,
+    UNIQUE(cart_id, product_id)
+);
+CREATE TABLE IF NOT EXISTS reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id TEXT NOT NULL REFERENCES orders(id),
+    product_id TEXT NOT NULL REFERENCES catalog(id),
+    customer_id TEXT NOT NULL,
+    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+    review_text TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(order_id, product_id, customer_id)
+);
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cart_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'OPEN',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS discount_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    condition_discount_pct REAL NOT NULL,
+    condition_addon_value REAL NOT NULL,
+    auto_approve INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
 """
 
 def connect() -> sqlite3.Connection:
@@ -98,6 +178,87 @@ def seed() -> None:
         for column, statement in migrations.items():
             if column not in catalog_columns:
                 conn.execute(statement)
+        
+        # Check for new tables and create them if missing
+        existing_tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        new_tables = {
+            "notification_events": """
+                CREATE TABLE IF NOT EXISTS notification_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    recipient_email TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    body TEXT NOT NULL,
+                    metadata TEXT,
+                    created_at TEXT NOT NULL
+                )
+            """,
+            "saved_carts": """
+                CREATE TABLE IF NOT EXISTS saved_carts (
+                    id TEXT PRIMARY KEY,
+                    cart_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """,
+            "saved_cart_items": """
+                CREATE TABLE IF NOT EXISTS saved_cart_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    saved_cart_id TEXT NOT NULL REFERENCES saved_carts(id),
+                    product_id TEXT NOT NULL REFERENCES catalog(id),
+                    qty INTEGER NOT NULL DEFAULT 1,
+                    unit_price INTEGER,
+                    UNIQUE(saved_cart_id, product_id)
+                )
+            """,
+            "wishlists": """
+                CREATE TABLE IF NOT EXISTS wishlists (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cart_id TEXT NOT NULL,
+                    product_id TEXT NOT NULL REFERENCES catalog(id),
+                    created_at TEXT NOT NULL,
+                    UNIQUE(cart_id, product_id)
+                )
+            """,
+            "reviews": """
+                CREATE TABLE IF NOT EXISTS reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    order_id TEXT NOT NULL REFERENCES orders(id),
+                    product_id TEXT NOT NULL REFERENCES catalog(id),
+                    customer_id TEXT NOT NULL,
+                    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+                    review_text TEXT,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(order_id, product_id, customer_id)
+                )
+            """,
+            "support_tickets": """
+                CREATE TABLE IF NOT EXISTS support_tickets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cart_id TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'OPEN',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """,
+            "discount_rules": """
+                CREATE TABLE IF NOT EXISTS discount_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    condition_discount_pct REAL NOT NULL,
+                    condition_addon_value REAL NOT NULL,
+                    auto_approve INTEGER NOT NULL DEFAULT 0,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL
+                )
+            """
+        }
+        
+        for table_name, create_sql in new_tables.items():
+            if table_name not in existing_tables:
+                conn.execute(create_sql)
         catalog_path = ROOT / "catalog.json"
         if catalog_path.exists():
             data = json.loads(catalog_path.read_text(encoding="utf-8"))
