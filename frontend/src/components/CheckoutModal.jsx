@@ -6,6 +6,7 @@ export default function CheckoutModal({
   cartId,
   close,
   refresh,
+  onSuccess
 }) {
   const [state, setState] = useState('idle');
   const [message, setMessage] = useState('');
@@ -342,6 +343,11 @@ export default function CheckoutModal({
             // Refresh cart.
             // Backend has already cleared it.
             await refresh();
+
+            // Call onSuccess callback if provided (for AI Buyer autonomous checkout)
+            if (onSuccess && verification.receipt) {
+              onSuccess(verification.receipt);
+            }
 
           } catch (error) {
 

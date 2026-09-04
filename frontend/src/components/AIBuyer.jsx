@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api';
+import CheckoutModal from './CheckoutModal';
 
 const money = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
@@ -29,6 +30,7 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [executionTrace, setExecutionTrace] = useState([]);
   const [verificationInProgress, setVerificationInProgress] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
 
   useEffect(() => {
     loadMandate();
@@ -196,33 +198,35 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
         status: 'completed'
       }]);
 
-      // Now proceed with checkout
+      // Log amounts for verification
+      const aiSelectedTotal = buyerResult.recommendations.reduce(
+        (sum, rec) => sum + (rec.price * (rec.quantity || 1)), 0
+      );
+      const finalCartTotal = cart?.total || 0;
+
+      console.log('[AI CHECKOUT] AI selected total =', aiSelectedTotal);
+      console.log('[AI CHECKOUT] Final cart total =', finalCartTotal);
+
       setExecutionTrace(prev => [...prev, {
-        step: 'Initiating autonomous checkout',
-        detail: 'Cart updated with AI selections, initiating payment',
+        step: 'Cart prepared',
+        detail: `Cart prepared with AI selections. Total: ₹${finalCartTotal.toLocaleString()}`,
+        status: 'completed'
+      }]);
+
+      setExecutionTrace(prev => [...prev, {
+        step: 'Payment authorization validated',
+        detail: 'Buyer mandate and merchant policy validated for autonomous purchase',
+        status: 'completed'
+      }]);
+
+      // Open CheckoutModal for actual Razorpay payment
+      setExecutionTrace(prev => [...prev, {
+        step: 'Opening secure payment checkout',
+        detail: 'Launching Razorpay Checkout for test payment',
         status: 'in_progress'
       }]);
 
-      const orderResult = await api(`/api/checkout/${cartId}`, {
-        method: 'POST'
-      });
-
-      setExecutionTrace(prev => prev.map(step => 
-        step.step === 'Initiating autonomous checkout' 
-          ? { ...step, status: 'completed' }
-          : step
-      ));
-
-      setCheckoutResult({
-        order: orderResult.order,
-        mandate: orderResult.mandate
-      });
-
-      setExecutionTrace(prev => [...prev, {
-        step: 'Autonomous checkout initiated',
-        detail: 'AI Buyer authorized payment under mandate',
-        status: 'completed'
-      }]);
+      setShowCheckoutModal(true);
 
     } catch (err) {
       const errorMessage = err.detail || err.message || err.toString();
@@ -234,8 +238,53 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
       }]);
     } finally {
       setCheckoutLoading(false);
-      setVerificationInProgress(false);
+      // Keep verificationInProgress true until CheckoutModal completes
     }
+  };
+
+  const handleAutonomousPaymentSuccess = (verification) => {
+    console.log('[AI CHECKOUT] Payment verified:', verification);
+
+    setExecutionTrace(prev => [...prev, {
+      step: 'Payment verified',
+      detail: `Payment ID: ${verification.payment_id}, Order ID: ${verification.razorpay_order_id}`,
+      status: 'completed'
+    }]);
+
+    setExecutionTrace(prev => [...prev, {
+      step: 'Order persisted',
+      detail: `Application order ${verification.order_id} persisted successfully`,
+      status: 'completed'
+    }]);
+
+    setCheckoutResult({
+      order: verification,
+      mandate: buyerResult.mandate
+    });
+
+    setExecutionTrace(prev => [...prev, {
+      step: 'Autonomous purchase complete',
+      detail: 'AI Buyer completed autonomous purchase under mandate',
+      status: 'completed'
+    }]);
+
+    setVerificationInProgress(false);
+    setShowCheckoutModal(false);
+
+    // Refresh orders and cart
+    onRefresh();
+  };
+
+  const handleCheckoutModalClose = () => {
+    setShowCheckoutModal(false);
+    setVerificationInProgress(false);
+    setCheckoutLoading(false);
+
+    setExecutionTrace(prev => [...prev, {
+      step: 'Payment not completed',
+      detail: 'Razorpay Checkout was closed without completing payment',
+      status: 'failed'
+    }]);
   };
 
   if (loading) {
@@ -623,12 +672,20 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
             
             <div className="success-details">
               <div className="success-item">
-                <span>Order</span>
-                <strong>{checkoutResult.order?.id || 'Processing...'}</strong>
+                <span>Order ID</span>
+                <strong>{checkoutResult.order?.order_id || checkoutResult.order?.id || 'Processing...'}</strong>
+              </div>
+              <div className="success-item">
+                <span>Order Number</span>
+                <strong>{checkoutResult.order?.order_number || 'Processing...'}</strong>
               </div>
               <div className="success-item">
                 <span>Amount</span>
-                <strong>{money(checkoutResult.order?.amount / 100 || 0)}</strong>
+                <strong>{money(checkoutResult.order?.amount || 0)}</strong>
+              </div>
+              <div className="success-item">
+                <span>Payment ID</span>
+                <strong>{checkoutResult.order?.payment_id || checkoutResult.order?.razorpay_payment_id || 'Processing...'}</strong>
               </div>
               <div className="success-badge">
                 🤖 Purchased by AI Buyer
@@ -652,6 +709,17 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
           <p>{typeof error === 'object' ? JSON.stringify(error, null, 2) : error}</p>
           <button onClick={() => setError('')}>Dismiss</button>
         </div>
+      )}
+
+      {/* Checkout Modal for Autonomous Payment */}
+      {showCheckoutModal && (
+        <CheckoutModal
+          cart={cart}
+          cartId={cartId}
+          close={handleCheckoutModalClose}
+          refresh={onRefresh}
+          onSuccess={handleAutonomousPaymentSuccess}
+        />
       )}
     </div>
   );
