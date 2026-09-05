@@ -118,21 +118,103 @@ export default function App() {
     'wishlist',
     'reviews',
     'support',
-    'analytics',
     'segments',
     'discount-rules',
     'settings',
   ];
 
   const buyerPages = new Set(['buyer', 'products', 'cart', 'growth-ai', 'orders', 'saved-carts', 'wishlist', 'reviews', 'support']);
-  const merchantPages = new Set(['dashboard', 'catalog', 'approvals', 'orders', 'revenue', 'policies', 'audit', 'analytics', 'segments', 'discount-rules', 'settings']);
+  const merchantPages = new Set(['dashboard', 'catalog', 'approvals', 'orders', 'revenue', 'policies', 'audit','segments', 'discount-rules', 'settings']);
 
   const pageForExperience = (page, role = experience) => {
     if (role === 'buyer' && !buyerPages.has(page)) return 'buyer';
     if (role === 'merchant' && !merchantPages.has(page)) return 'dashboard';
     return page;
   };
+/// ============================================================
+// WISHLIST
+// ============================================================
 
+const [wishlist, setWishlist] = useState([]);
+
+const loadWishlist = async () => {
+  const currentCartId = cart?.id;
+
+  if (!currentCartId) {
+    setWishlist([]);
+    return;
+  }
+
+  try {
+    const data = await api(
+      `/api/wishlist/${currentCartId}`
+    );
+
+    setWishlist(
+      Array.isArray(data) ? data : []
+    );
+  } catch (err) {
+    console.error(
+      'Failed to load wishlist:',
+      err
+    );
+  }
+};
+
+useEffect(() => {
+  if (cart?.id) {
+    loadWishlist();
+  }
+}, [cart?.id]);
+
+const isInWishlist = (productId) => {
+  return wishlist.some(
+    (item) =>
+      item.product_id === productId
+  );
+};
+
+const toggleWishlist = async (productId) => {
+  const currentCartId = cart?.id;
+
+  if (!currentCartId) {
+    console.error('No cart ID available');
+    return;
+  }
+
+  try {
+    if (isInWishlist(productId)) {
+
+      await api(
+        `/api/wishlist/${currentCartId}/${productId}`,
+        {
+          method: 'DELETE',
+        }
+      );
+
+    } else {
+
+      await api(
+        '/api/wishlist',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            cart_id: currentCartId,
+            product_id: productId,
+          }),
+        }
+      );
+    }
+
+    await loadWishlist();
+
+  } catch (err) {
+    console.error(
+      'Failed to update wishlist:',
+      err
+    );
+  }
+};
   const [activePage, setActivePage] = useState(() => {
     const hash = window.location.hash.replace('#', '');
     const requestedPage = hash.replace(/^buyer\//, '').replace(/^merchant\//, '');
@@ -1099,11 +1181,7 @@ const viewReceipt = (orderId) => {
       icon: '₹',
     },
 
-    {
-      key: 'analytics',
-      label: 'Analytics',
-      icon: '📊',
-    },
+    
 
     {
       key: 'segments',
@@ -1372,319 +1450,643 @@ const viewReceipt = (orderId) => {
           )}
 
           {/* ==================================================
-              DASHBOARD
-          ================================================== */}
+    DASHBOARD
+================================================== */}
 
-          {activePage ===
-            'dashboard' && (
-            <div className="page-view dashboard-view">
+{activePage === 'dashboard' && (
+  <div className="page-view dashboard-view">
 
-              <section className="summary-grid">
+    {/* ================= KPI ROW ================= */}
 
-                {summary.map((s) => (
-                  <article
-                    key={s.label}
-                    className="clickable-summary"
-                    onClick={() =>
-                      navigateTo(
-                        s.page
-                      )
-                    }
-                  >
-                    <span>
-                      {s.label}
-                    </span>
+    <section className="dashboard-kpi-grid">
 
-                    <strong>
-                      {s.value}
-                    </strong>
+      {summary.map((s, index) => (
+        <article
+          key={s.label}
+          className={`dashboard-kpi-card ${
+            index === 0 ? 'primary-kpi' : ''
+          }`}
+          onClick={() => navigateTo(s.page)}
+        >
+          <div className="dashboard-kpi-header">
+            <span>{s.label}</span>
+            <span className="dashboard-kpi-arrow">↗</span>
+          </div>
 
-                    <small>
-                      {s.caption}
-                    </small>
-                  </article>
-                ))}
+          <strong>{s.value}</strong>
 
-              </section>
+          <small>{s.caption}</small>
+        </article>
+      ))}
 
-              <section className="hero">
+    </section>
 
-                <div>
-                  <p className="section-kicker">
-                    AGENTIC COMMERCE
-                  </p>
 
-                  <h2>
-                    Grow every order responsibly.
-                  </h2>
+    {/* ================= MAIN HERO ================= */}
 
-                  <p>
-                    AI discovery →
-                    recommendation →
-                    policy validation →
-                    human authorization →
-                    Razorpay transaction →
-                    audit.
-                  </p>
+    <section className="dashboard-main-card">
+
+      <div className="dashboard-main-content">
+
+        <div className="agent-online-badge">
+          <span></span>
+          GROWTH AGENT ONLINE
+        </div>
+
+        <span className="section-kicker">
+          AGENTIC COMMERCE
+        </span>
+
+        <h1>
+          Grow every order,
+          <span> responsibly.</span>
+        </h1>
+
+        <p>
+          AI discovers opportunities, recommends products,
+          validates merchant policies, and keeps humans in
+          control before every transaction.
+        </p>
+
+        <div className="dashboard-main-actions">
+
+          <button
+            className="dashboard-primary-action"
+            onClick={() => navigateTo('growth-ai')}
+          >
+            ✦ Run Growth AI
+          </button>
+
+          <button
+            className="dashboard-secondary-action"
+            onClick={() => navigateTo('analytics')}
+          >
+            View Analytics →
+          </button>
+
+        </div>
+
+      </div>
+
+
+      {/* ================= AI SUMMARY ================= */}
+
+      <div className="dashboard-ai-summary">
+
+        <div className="ai-summary-header">
+          <span>AI COMMERCE</span>
+          <span className="ai-live">LIVE</span>
+        </div>
+
+        <div className="ai-summary-value">
+          {agent?.proposal?.addons?.length || 0}
+        </div>
+
+        <p>
+          Active AI suggestions
+        </p>
+
+        <div className="ai-summary-divider"></div>
+
+        <div className="ai-summary-row">
+          <span>Pending approvals</span>
+          <strong>{approvals.length}</strong>
+        </div>
+
+        <div className="ai-summary-row">
+          <span>Orders completed</span>
+          <strong>{orders.length}</strong>
+        </div>
+
+      </div>
+
+    </section>
+
+
+    {/* ================= WORKFLOW ================= */}
+
+    <section className="workflow-panel">
+
+      <div className="workflow-panel-header">
+
+        <div>
+          <span className="section-kicker">
+            EXECUTION PIPELINE
+          </span>
+
+          <h3>
+            Agent Workflow
+          </h3>
+        </div>
+
+        <span className="workflow-status">
+          Policy Controlled
+        </span>
+
+      </div>
+
+
+      <div className="agent-workflow">
+
+        <div className="workflow-node active">
+
+          <div className="workflow-node-number">
+            01
+          </div>
+
+          <div className="workflow-node-icon">
+            ◎
+          </div>
+
+          <strong>
+            AI Buyer
+          </strong>
+
+          <small>
+            Intent
+          </small>
+
+        </div>
+
+
+        <div className="workflow-connector">
+          →
+        </div>
+
+
+        <div className="workflow-node">
+
+          <div className="workflow-node-number">
+            02
+          </div>
+
+          <div className="workflow-node-icon">
+            ▦
+          </div>
+
+          <strong>
+            Catalog
+          </strong>
+
+          <small>
+            Discovery
+          </small>
+
+        </div>
+
+
+        <div className="workflow-connector">
+          →
+        </div>
+
+
+        <div className="workflow-node">
+
+          <div className="workflow-node-number">
+            03
+          </div>
+
+          <div className="workflow-node-icon">
+            ✦
+          </div>
+
+          <strong>
+            Suggest
+          </strong>
+
+          <small>
+            Upsell
+          </small>
+
+        </div>
+
+
+        <div className="workflow-connector">
+          →
+        </div>
+
+
+        <div className="workflow-node">
+
+          <div className="workflow-node-number">
+            04
+          </div>
+
+          <div className="workflow-node-icon">
+            ✓
+          </div>
+
+          <strong>
+            Validate
+          </strong>
+
+          <small>
+            Policy
+          </small>
+
+        </div>
+
+
+        <div className="workflow-connector">
+          →
+        </div>
+
+
+        <div className="workflow-node">
+
+          <div className="workflow-node-number">
+            05
+          </div>
+
+          <div className="workflow-node-icon">
+            ◷
+          </div>
+
+          <strong>
+            Approve
+          </strong>
+
+          <small>
+            Human
+          </small>
+
+        </div>
+
+
+        <div className="workflow-connector">
+          →
+        </div>
+
+
+        <div className="workflow-node">
+
+          <div className="workflow-node-number">
+            06
+          </div>
+
+          <div className="workflow-node-icon">
+            ₹
+          </div>
+
+          <strong>
+            Pay
+          </strong>
+
+          <small>
+            Razorpay
+          </small>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    {/* ================= INSIGHTS ================= */}
+
+    <section className="dashboard-insights-section">
+
+      <div className="dashboard-section-heading">
+
+        <div>
+          <span className="section-kicker">
+            COMMAND CENTER
+          </span>
+
+          <h3>
+            Today's Insights
+          </h3>
+        </div>
+
+        <button
+          onClick={() => navigateTo('analytics')}
+        >
+          Full Analytics →
+        </button>
+
+      </div>
+
+
+      <div className="dashboard-insight-grid">
+
+        {/* AI SUGGESTION */}
+
+        <article className="dashboard-insight">
+
+          <div className="insight-top">
+
+            <div className="insight-symbol ai">
+              ✦
+            </div>
+
+            <div>
+              <span>
+                GROWTH AI
+              </span>
+
+              <h4>
+                Latest Recommendation
+              </h4>
+            </div>
+
+          </div>
+
+          <p>
+            {agent?.proposal?.reasoning ||
+              'Run Growth AI to discover policy-checked upsell opportunities for the current cart.'}
+          </p>
+
+          <button
+            onClick={() => navigateTo('growth-ai')}
+          >
+            Open Recommendation →
+          </button>
+
+        </article>
+
+
+        {/* APPROVALS */}
+
+        <article className="dashboard-insight">
+
+          <div className="insight-top">
+
+            <div className="insight-symbol approval">
+              ◷
+            </div>
+
+            <div>
+              <span>
+                HUMAN OVERSIGHT
+              </span>
+
+              <h4>
+                Approval Queue
+              </h4>
+            </div>
+
+          </div>
+
+          <div className="approval-dashboard-number">
+            {approvals.length}
+            <small>pending actions</small>
+          </div>
+
+          <p>
+            {approvals.length
+              ? 'AI actions are waiting for merchant authorization.'
+              : '✓ No actions are currently waiting for authorization.'}
+          </p>
+
+          <button
+            onClick={() => navigateTo('approvals')}
+          >
+            Review Approvals →
+          </button>
+
+        </article>
+
+
+        {/* SYSTEM STATUS */}
+
+        <article className="dashboard-insight">
+
+          <div className="insight-top">
+
+            <div className="insight-symbol system">
+              ◉
+            </div>
+
+            <div>
+              <span>
+                SYSTEM STATUS
+              </span>
+
+              <h4>
+                Commerce Engine
+              </h4>
+            </div>
+
+          </div>
+
+          <div className="system-status-list">
+
+            <div>
+              <span>Growth Agent</span>
+              <strong>Operational</strong>
+            </div>
+
+            <div>
+              <span>Policy Engine</span>
+              <strong>Operational</strong>
+            </div>
+
+            <div>
+              <span>Payment Layer</span>
+              <strong>Operational</strong>
+            </div>
+
+          </div>
+
+          <button
+            onClick={() => navigateTo('audit')}
+          >
+            View Audit Trail →
+          </button>
+
+        </article>
+
+      </div>
+
+    </section>
+
+  </div>
+)}
+         {/* ==================================================
+    PRODUCTS
+================================================== */}
+
+{activePage === 'catalog' && (
+  <div className="page-view catalog-view">
+    <MerchantCatalog
+      products={merchantCatalog}
+      onRefresh={refresh}
+    />
+  </div>
+)}
+
+{activePage === 'products' && (
+  <div className="page-view products-view">
+
+    <section className="store-head">
+      <div>
+        <p className="section-kicker">
+          AGENT-READABLE CATALOG
+        </p>
+
+        <h2>
+          Cookware Catalog
+        </h2>
+      </div>
+
+      <span>
+        {catalog.length} pieces
+      </span>
+    </section>
+
+    <div className="product-grid">
+
+      {catalog.map((p) => {
+
+        const id =
+          p.id ??
+          p.product_id;
+
+        const price =
+          p.price ??
+          p.price_inr;
+
+        const qty =
+          cart?.items?.find(
+            (i) =>
+              (i.id ?? i.product_id) === id
+          )?.qty || 0;
+
+        const wished =
+          isInWishlist(id);
+
+        return (
+          <article
+            className="product-card"
+            key={id}
+          >
+
+            {/* ==================================================
+                PRODUCT IMAGE
+            ================================================== */}
+
+            <div className="product-art">
+
+              {p.image_url ? (
+                <img
+                  src={p.image_url}
+                  alt={p.name}
+                />
+              ) : (
+                <div className="product-image-placeholder">
+                  No image
                 </div>
+              )}
 
-                <div className="workflow">
-                  <span>
-                    AI Buyer
-                  </span>
+              {/* Category */}
+              <small className="product-category">
+                {p.category}
+              </small>
 
-                  <i>→</i>
+              {/* ==================================================
+                  WISHLIST HEART
+              ================================================== */}
 
-                  <span>
-                    Catalog
-                  </span>
-
-                  <i>→</i>
-
-                  <span>
-                    Suggest
-                  </span>
-
-                  <i>→</i>
-
-                  <span>
-                    Validate
-                  </span>
-
-                  <i>→</i>
-
-                  <span>
-                    Approve
-                  </span>
-
-                  <i>→</i>
-
-                  <span>
-                    Pay
-                  </span>
-                </div>
-
-              </section>
-
-              <div className="dashboard-previews">
-
-                <article className="preview-card">
-                  <div className="preview-head">
-
-                    <h3>
-                      ✦ AI Suggestions
-                    </h3>
-
-                    <button
-                      onClick={() =>
-                        navigateTo(
-                          'growth-ai'
-                        )
-                      }
-                    >
-                      View →
-                    </button>
-                  </div>
-
-                  <p>
-                    {agent?.proposal?.reasoning ||
-                      'Run the Growth Agent to generate policy-checked recommendations.'}
-                  </p>
-
-                </article>
-
-                <article className="preview-card">
-
-                  <div className="preview-head">
-
-                    <h3>
-                      ◎ AI Buyer
-                    </h3>
-
-                    <button
-                      onClick={() =>
-                        navigateTo(
-                          'buyer'
-                        )
-                      }
-                    >
-                      Try →
-                    </button>
-
-                  </div>
-
-                  <p>
-                    Let an AI buyer
-                    discover products
-                    and add them to a
-                    transaction.
-                  </p>
-
-                </article>
-
-                <article className="preview-card">
-
-                  <div className="preview-head">
-
-                    <h3>
-                      ◷ Approvals
-                    </h3>
-
-                    <button
-                      onClick={() =>
-                        navigateTo(
-                          'approvals'
-                        )
-                      }
-                    >
-                      View →
-                    </button>
-
-                  </div>
-
-                  <p>
-                    {approvals.length
-                      ? `${approvals.length} action(s) waiting for human authorization.`
-                      : '✓ No actions are waiting for authorization.'}
-                  </p>
-
-                </article>
-
-              </div>
+              <button
+                type="button"
+                className={`wishlist-heart ${
+                  wished ? 'active' : ''
+                }`}
+                onClick={() => toggleWishlist(id)}
+                aria-label={
+                  wished
+                    ? `Remove ${p.name} from wishlist`
+                    : `Add ${p.name} to wishlist`
+                }
+                title={
+                  wished
+                    ? 'Remove from wishlist'
+                    : 'Add to wishlist'
+                }
+              >
+                <svg
+  width="21"
+  height="21"
+  viewBox="0 0 24 24"
+  aria-hidden="true"
+>
+  <path
+    d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"
+    fill={wished ? '#26734d' : 'none'}
+    stroke="#26734d"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  />
+</svg>
+              </button>
 
             </div>
-          )}
 
-          {/* ==================================================
-              PRODUCTS
-          ================================================== */}
+            {/* ==================================================
+                PRODUCT DETAILS
+            ================================================== */}
 
-          {activePage === 'catalog' && (
-            <div className="page-view catalog-view">
-              <MerchantCatalog products={merchantCatalog} onRefresh={refresh} />
-            </div>
-          )}
+            <div className="product-copy">
 
-          {activePage ===
-            'products' && (
-            <div className="page-view products-view">
+              <h3>
+                {p.name}
+              </h3>
 
-              <section className="store-head">
-
-                <div>
-
-                  <p className="section-kicker">
-                    AGENT-READABLE CATALOG
-                  </p>
-
-                  <h2>
-                    Cookware Catalog
-                  </h2>
-
-                </div>
-
-                <span>
-                  {catalog.length} pieces
-                </span>
-
-              </section>
-
-              <div className="product-grid">
-
-                {catalog.map((p) => {
-
-                  const id =
-                    p.id ||
-                    p.product_id;
-
-                  const price =
-                    p.price ||
-                    p.price_inr;
-
-                  const qty =
-                    cart?.items?.find(
-                      (i) =>
-                        (
-                          i.id ||
-                          i.product_id
-                        ) === id
-                    )?.qty || 0;
-
-                  return (
-                    <article
-                      className="product-card"
-                      key={id}
-                    >
-
-                      <div className="product-art">
-
-                        {p.image_url && (
-                          <img
-                            src={
-                              p.image_url
-                            }
-                            alt={
-                              p.name
-                            }
-                          />
-                        )}
-
-                        <small>
-                          {p.category}
-                        </small>
-
-                      </div>
-
-                      <div className="product-copy">
-
-                        <h3>
-                          {p.name}
-                        </h3>
-
-                        <p>
-                          {p.description}
-                        </p>
-
-                      </div>
-
-                      <div className="product-bottom">
-
-                        <b>
-                          {money(price)}
-                        </b>
-
-                        <small>
-                          {p.stock} in stock
-                        </small>
-
-                      </div>
-
-                      <button
-                        className={
-                          qty
-                            ? 'added'
-                            : ''
-                        }
-                        onClick={() =>
-                          update(
-                            id,
-                            qty + 1
-                          )
-                        }
-                      >
-                        {qty
-                          ? `In cart · ${qty}`
-                          : '+ Add to cart'}
-                      </button>
-
-                    </article>
-                  );
-                })}
-
-              </div>
+              <p>
+                {p.description}
+              </p>
 
             </div>
-          )}
+
+            {/* ==================================================
+                PRICE / STOCK
+            ================================================== */}
+
+            <div className="product-bottom">
+
+              <b>
+                {money(price)}
+              </b>
+
+              <small>
+                {p.stock} in stock
+              </small>
+
+            </div>
+
+            {/* ==================================================
+                ADD TO CART
+            ================================================== */}
+
+            <button
+              type="button"
+              className={
+                qty
+                  ? 'added'
+                  : ''
+              }
+              onClick={() =>
+                update(
+                  id,
+                  qty + 1
+                )
+              }
+            >
+              {qty
+                ? `In cart · ${qty}`
+                : '+ Add to cart'}
+            </button>
+
+          </article>
+        );
+      })}
+
+    </div>
+
+  </div>
+)}
 
           {/* ==================================================
               CART
@@ -2791,117 +3193,1057 @@ const viewReceipt = (orderId) => {
             </div>
           )}
 
-          {/* NEW MERCHANT PAGES */}
-          {activePage === 'analytics' && (
-            <div className="page-view">
-              <section className="cart-panel">
-                <header className="orders-header">
-                  <span className="section-kicker">ANALYTICS</span>
-                  <h2 className="orders-title">Sales Analytics</h2>
-                </header>
-                <div className="analytics-dashboard">
-                  <div className="analytics-card">
-                    <h3>Total Revenue</h3>
-                    <p className="analytics-value">{money(revenue?.total_test_revenue || 0)}</p>
-                  </div>
-                  <div className="analytics-card">
-                    <h3>Orders</h3>
-                    <p className="analytics-value">{orders.length}</p>
-                  </div>
-                  <div className="analytics-card">
-                    <h3>Average Order Value</h3>
-                    <p className="analytics-value">{money(revenue?.average_order_value || 0)}</p>
-                  </div>
-                  <div className="analytics-card">
-                    <h3>AI Revenue</h3>
-                    <p className="analytics-value">{money(revenue?.ai_assisted_revenue || 0)}</p>
-                  </div>
-                </div>
-              </section>
-            </div>
-          )}
+          {/* SALES ANALYTICS */}
+{activePage === 'analytics' && (
+  <div className="page-view">
+    <section className="cart-panel analytics-page">
 
+      {/* HEADER */}
+      <header className="orders-header analytics-header">
+        <div>
+          <span className="section-kicker">MERCHANT INSIGHTS</span>
+          <h2 className="orders-title">Sales Analytics</h2>
+          <p className="analytics-subtitle">
+            Monitor revenue, orders, and AI-assisted sales performance.
+          </p>
+        </div>
+
+        <button
+          className="analytics-refresh-btn"
+          onClick={() => window.location.reload()}
+        >
+          ↻ Refresh
+        </button>
+      </header>
+
+      {/* KPI CARDS */}
+      <div className="analytics-dashboard">
+
+        <div className="analytics-card revenue-card">
+          <div className="analytics-card-top">
+            <span className="analytics-label">TOTAL REVENUE</span>
+            <span className="analytics-icon">₹</span>
+          </div>
+
+          <p className="analytics-value">
+            {money(revenue?.total_test_revenue || 0)}
+          </p>
+
+          <div className="analytics-card-footer">
+            <span className="analytics-positive">↑ Revenue generated</span>
+          </div>
+        </div>
+
+        <div className="analytics-card">
+          <div className="analytics-card-top">
+            <span className="analytics-label">TOTAL ORDERS</span>
+            <span className="analytics-icon">↗</span>
+          </div>
+
+          <p className="analytics-value">
+            {orders.length}
+          </p>
+
+          <div className="analytics-card-footer">
+            <span className="analytics-muted">
+              Completed orders
+            </span>
+          </div>
+        </div>
+
+        <div className="analytics-card">
+          <div className="analytics-card-top">
+            <span className="analytics-label">AVERAGE ORDER VALUE</span>
+            <span className="analytics-icon">⌁</span>
+          </div>
+
+          <p className="analytics-value">
+            {money(revenue?.average_order_value || 0)}
+          </p>
+
+          <div className="analytics-card-footer">
+            <span className="analytics-muted">
+              Average per order
+            </span>
+          </div>
+        </div>
+
+        <div className="analytics-card ai-revenue-card">
+          <div className="analytics-card-top">
+            <span className="analytics-label">AI-ASSISTED REVENUE</span>
+            <span className="analytics-icon ai-icon">✦</span>
+          </div>
+
+          <p className="analytics-value">
+            {money(revenue?.ai_assisted_revenue || 0)}
+          </p>
+
+          <div className="analytics-card-footer">
+            <span className="analytics-ai-badge">
+              ✦ Growth AI
+            </span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ANALYTICS GRID */}
+      <div className="analytics-content-grid">
+
+        {/* REVENUE OVERVIEW */}
+        <div className="analytics-panel">
+          <div className="analytics-panel-header">
+            <div>
+              <span className="analytics-panel-kicker">
+                PERFORMANCE
+              </span>
+              <h3>Revenue Overview</h3>
+            </div>
+
+            <span className="analytics-period">
+              All Time
+            </span>
+          </div>
+
+          <div className="revenue-overview">
+            <div className="revenue-main-value">
+              {money(revenue?.total_test_revenue || 0)}
+            </div>
+
+            <p>
+              Total revenue generated from successful orders
+            </p>
+
+            <div className="revenue-bar">
+              <div
+                className="revenue-bar-fill"
+                style={{
+                  width:
+                    revenue?.total_test_revenue > 0
+                      ? '78%'
+                      : '0%'
+                }}
+              />
+            </div>
+
+            <div className="revenue-bar-labels">
+              <span>Revenue</span>
+              <span>
+                {orders.length} orders
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* AI PERFORMANCE */}
+        <div className="analytics-panel ai-performance-panel">
+          <div className="analytics-panel-header">
+            <div>
+              <span className="analytics-panel-kicker">
+                GROWTH AI
+              </span>
+              <h3>AI Performance</h3>
+            </div>
+
+            <span className="ai-status">
+              ● Active
+            </span>
+          </div>
+
+          <div className="ai-performance-content">
+
+            <div className="ai-stat">
+              <span>AI-Assisted Revenue</span>
+              <strong>
+                {money(revenue?.ai_assisted_revenue || 0)}
+              </strong>
+            </div>
+
+            <div className="ai-stat">
+              <span>AI Revenue Share</span>
+              <strong>
+                {revenue?.total_test_revenue > 0
+                  ? `${Math.round(
+                      ((revenue?.ai_assisted_revenue || 0) /
+                        revenue.total_test_revenue) *
+                        100
+                    )}%`
+                  : '0%'}
+              </strong>
+            </div>
+
+            <div className="ai-progress">
+              <div
+                className="ai-progress-fill"
+                style={{
+                  width:
+                    revenue?.total_test_revenue > 0
+                      ? `${Math.min(
+                          100,
+                          ((revenue?.ai_assisted_revenue || 0) /
+                            revenue.total_test_revenue) *
+                            100
+                        )}%`
+                      : '0%'
+                }}
+              />
+            </div>
+
+            <p className="ai-performance-description">
+              Revenue influenced by Growth AI recommendations
+              and intelligent upselling.
+            </p>
+
+          </div>
+        </div>
+
+      </div>
+
+      {/* ORDER PERFORMANCE */}
+      <div className="analytics-panel order-performance-panel">
+
+        <div className="analytics-panel-header">
+          <div>
+            <span className="analytics-panel-kicker">
+              ORDER INSIGHTS
+            </span>
+            <h3>Order Performance</h3>
+          </div>
+        </div>
+
+        <div className="order-stats-grid">
+
+          <div className="order-stat-box">
+            <span>Total Orders</span>
+            <strong>{orders.length}</strong>
+          </div>
+
+          <div className="order-stat-box">
+            <span>Average Order Value</span>
+            <strong>
+              {money(revenue?.average_order_value || 0)}
+            </strong>
+          </div>
+
+          <div className="order-stat-box">
+            <span>AI Assisted Orders</span>
+            <strong>
+              {orders.filter(
+                order => order.ai_assisted
+              ).length}
+            </strong>
+          </div>
+
+          <div className="order-stat-box">
+            <span>AI Conversion Share</span>
+            <strong>
+              {orders.length > 0
+                ? `${Math.round(
+                    (orders.filter(
+                      order => order.ai_assisted
+                    ).length /
+                      orders.length) *
+                      100
+                  )}%`
+                : '0%'}
+            </strong>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+  </div>
+)}
           {activePage === 'segments' && (
-            <div className="page-view">
-              <section className="cart-panel">
-                <header className="orders-header">
-                  <span className="section-kicker">CUSTOMER INSIGHTS</span>
-                  <h2 className="orders-title">Customer Segments</h2>
-                </header>
-                <div className="segments-dashboard">
-                  <div className="segment-card">
-                    <h3>High Value</h3>
-                    <p>Customers with total spend &gt; ₹10,000</p>
-                  </div>
-                  <div className="segment-card">
-                    <h3>Frequent Buyers</h3>
-                    <p>Customers with 5+ orders</p>
-                  </div>
-                  <div className="segment-card">
-                    <h3>New Customers</h3>
-                    <p>First-time purchasers</p>
-                  </div>
-                  <div className="segment-card">
-                    <h3>Growth Responsive</h3>
-                    <p>Customers who accepted AI recommendations</p>
-                  </div>
-                </div>
-              </section>
-            </div>
-          )}
+  <div className="page-view">
+    <section className="cart-panel segments-page">
 
-          {activePage === 'discount-rules' && (
-            <div className="page-view">
-              <section className="cart-panel">
-                <header className="orders-header">
-                  <span className="section-kicker">AUTOMATION</span>
-                  <h2 className="orders-title">Discount Rules</h2>
-                </header>
-                <div className="discount-rules-panel">
-                  <p>Configure automatic discount approval rules</p>
-                  <div className="rule-example">
-                    <h4>Example Rule:</h4>
-                    <p>IF discount ≤ 5% AND addon value ≤ ₹2000 THEN auto-approve</p>
-                  </div>
-                  <button className="primary-button">Add New Rule</button>
-                </div>
-              </section>
-            </div>
-          )}
+      {/* Header */}
+      <header className="orders-header segments-header">
+        <div>
+          <span className="section-kicker">CUSTOMER INSIGHTS</span>
+          <h2 className="orders-title">Customer Segments</h2>
+          <p className="page-description">
+            Understand customer behavior and target the right users with AI-powered growth actions.
+          </p>
+        </div>
 
-          {activePage === 'settings' && (
-            <div className="page-view">
-              <section className="cart-panel">
-                <header className="orders-header">
-                  <span className="section-kicker">CONFIGURATION</span>
-                  <h2 className="orders-title">Growth Agent Settings</h2>
-                </header>
-                <div className="settings-panel">
-                  <div className="setting-item">
-                    <label>Maximum Add-ons</label>
-                    <input type="number" defaultValue={3} min="1" max="10" />
-                  </div>
-                  <div className="setting-item">
-                    <label>Maximum Discount (%)</label>
-                    <input type="number" defaultValue={15} min="0" max="50" />
-                  </div>
-                  <div className="setting-item">
-                    <label>Maximum Cart Increase (%)</label>
-                    <input type="number" defaultValue={30} min="0" max="100" />
-                  </div>
-                  <div className="setting-item">
-                    <label>Preferred Categories</label>
-                    <select multiple>
-                      <option>Cookware</option>
-                      <option>Knives</option>
-                      <option>Utensils</option>
-                    </select>
-                  </div>
-                  <button className="primary-button">Save Settings</button>
-                </div>
-              </section>
+        <button className="secondary-button">
+          ↻ Refresh Insights
+        </button>
+      </header>
+
+      {/* Overview */}
+      <div className="segments-overview">
+
+        <div className="segment-overview-card">
+          <div className="overview-icon">◉</div>
+          <div>
+            <span>Total Customers</span>
+            <strong>1,248</strong>
+            <small>+12.4% this month</small>
+          </div>
+        </div>
+
+        <div className="segment-overview-card">
+          <div className="overview-icon">₹</div>
+          <div>
+            <span>Avg. Customer Value</span>
+            <strong>₹4,820</strong>
+            <small>+8.7% this month</small>
+          </div>
+        </div>
+
+        <div className="segment-overview-card">
+          <div className="overview-icon">↗</div>
+          <div>
+            <span>AI Response Rate</span>
+            <strong>68%</strong>
+            <small>+5.2% this month</small>
+          </div>
+        </div>
+
+        <div className="segment-overview-card">
+          <div className="overview-icon">★</div>
+          <div>
+            <span>Repeat Customers</span>
+            <strong>436</strong>
+            <small>34.9% of customers</small>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Segment Section */}
+      <div className="segments-section">
+
+        <div className="segments-section-header">
+          <div>
+            <h3>Customer Segments</h3>
+            <p>Customers are automatically grouped based on their purchasing behavior.</p>
+          </div>
+
+          <span className="segment-count">
+            4 segments
+          </span>
+        </div>
+
+        <div className="segments-grid">
+
+          {/* High Value */}
+          <div className="customer-segment-card">
+
+            <div className="segment-card-header">
+              <div className="segment-icon high-value">
+                ₹
+              </div>
+
+              <span className="segment-badge">
+                High Value
+              </span>
             </div>
-          )}
+
+            <h3>High Value Customers</h3>
+
+            <p>
+              Customers with total spending above ₹10,000.
+            </p>
+
+            <div className="segment-metrics">
+              <div>
+                <span>Customers</span>
+                <strong>184</strong>
+              </div>
+
+              <div>
+                <span>Share</span>
+                <strong>14.7%</strong>
+              </div>
+
+              <div>
+                <span>Avg. Spend</span>
+                <strong>₹18.4K</strong>
+              </div>
+            </div>
+
+            <div className="segment-progress">
+              <div className="segment-progress-bar">
+                <span style={{ width: '72%' }}></span>
+              </div>
+            </div>
+
+            <div className="segment-card-footer">
+              <span>Best target for premium offers</span>
+              <button>View Customers →</button>
+            </div>
+
+          </div>
+
+
+          {/* Frequent Buyers */}
+          <div className="customer-segment-card">
+
+            <div className="segment-card-header">
+              <div className="segment-icon frequent">
+                ↻
+              </div>
+
+              <span className="segment-badge">
+                Frequent
+              </span>
+            </div>
+
+            <h3>Frequent Buyers</h3>
+
+            <p>
+              Customers who have completed 5 or more orders.
+            </p>
+
+            <div className="segment-metrics">
+              <div>
+                <span>Customers</span>
+                <strong>312</strong>
+              </div>
+
+              <div>
+                <span>Share</span>
+                <strong>25.0%</strong>
+              </div>
+
+              <div>
+                <span>Avg. Orders</span>
+                <strong>7.2</strong>
+              </div>
+            </div>
+
+            <div className="segment-progress">
+              <div className="segment-progress-bar">
+                <span style={{ width: '58%' }}></span>
+              </div>
+            </div>
+
+            <div className="segment-card-footer">
+              <span>Strong retention opportunity</span>
+              <button>View Customers →</button>
+            </div>
+
+          </div>
+
+
+          {/* New Customers */}
+          <div className="customer-segment-card">
+
+            <div className="segment-card-header">
+              <div className="segment-icon new-customer">
+                +
+              </div>
+
+              <span className="segment-badge">
+                New
+              </span>
+            </div>
+
+            <h3>New Customers</h3>
+
+            <p>
+              Customers who have made their first purchase recently.
+            </p>
+
+            <div className="segment-metrics">
+              <div>
+                <span>Customers</span>
+                <strong>428</strong>
+              </div>
+
+              <div>
+                <span>Share</span>
+                <strong>34.3%</strong>
+              </div>
+
+              <div>
+                <span>Avg. Spend</span>
+                <strong>₹2.1K</strong>
+              </div>
+            </div>
+
+            <div className="segment-progress">
+              <div className="segment-progress-bar">
+                <span style={{ width: '82%' }}></span>
+              </div>
+            </div>
+
+            <div className="segment-card-footer">
+              <span>Best target for second-purchase offers</span>
+              <button>View Customers →</button>
+            </div>
+
+          </div>
+
+
+          {/* Growth Responsive */}
+          <div className="customer-segment-card">
+
+            <div className="segment-card-header">
+              <div className="segment-icon growth">
+                ✦
+              </div>
+
+              <span className="segment-badge">
+                AI Responsive
+              </span>
+            </div>
+
+            <h3>Growth Responsive</h3>
+
+            <p>
+              Customers who accepted AI-powered product recommendations.
+            </p>
+
+            <div className="segment-metrics">
+              <div>
+                <span>Customers</span>
+                <strong>276</strong>
+              </div>
+
+              <div>
+                <span>Share</span>
+                <strong>22.1%</strong>
+              </div>
+
+              <div>
+                <span>AI Conv.</span>
+                <strong>68%</strong>
+              </div>
+            </div>
+
+            <div className="segment-progress">
+              <div className="segment-progress-bar">
+                <span style={{ width: '68%' }}></span>
+              </div>
+            </div>
+
+            <div className="segment-card-footer">
+              <span>Best audience for AI upselling</span>
+              <button>View Customers →</button>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+
+      {/* AI Recommendation */}
+      <div className="segments-ai-panel">
+
+        <div className="ai-panel-icon">
+          ✦
+        </div>
+
+        <div className="ai-panel-content">
+          <span className="section-kicker">GROWTH AI</span>
+
+          <h3>
+            Recommended Growth Opportunity
+          </h3>
+
+          <p>
+            Your <strong>428 new customers</strong> represent the largest
+            segment. Targeting them with personalized second-purchase
+            recommendations could increase repeat purchases.
+          </p>
+        </div>
+
+        <button className="primary-button">
+          Create AI Campaign →
+        </button>
+
+      </div>
+
+    </section>
+  </div>
+)}
+
+        {activePage === 'discount-rules' && (
+  <div className="page-view">
+    <section className="cart-panel discount-rules-page">
+
+      {/* Header */}
+      <header className="orders-header discount-rules-header">
+        <div>
+          <span className="section-kicker">AUTOMATION</span>
+          <h2 className="orders-title">Discount Rules</h2>
+          <p className="page-description">
+            Configure automatic discount approval and AI upsell policies.
+          </p>
+        </div>
+
+        <button className="primary-button add-rule-button">
+          <span>＋</span>
+          Add New Rule
+        </button>
+      </header>
+
+      {/* Rule Summary */}
+      <div className="rules-summary">
+        <div className="rule-stat">
+          <div className="rule-stat-icon">⚡</div>
+          <div>
+            <span className="rule-stat-label">Active Rules</span>
+            <strong>3</strong>
+          </div>
+        </div>
+
+        <div className="rule-stat">
+          <div className="rule-stat-icon">✓</div>
+          <div>
+            <span className="rule-stat-label">Auto Approved</span>
+            <strong>24</strong>
+          </div>
+        </div>
+
+        <div className="rule-stat">
+          <div className="rule-stat-icon">↗</div>
+          <div>
+            <span className="rule-stat-label">Approval Rate</span>
+            <strong>87%</strong>
+          </div>
+        </div>
+      </div>
+
+      {/* Rules */}
+      <div className="rules-section">
+
+        <div className="rules-section-header">
+          <div>
+            <h3>Active Rules</h3>
+            <p>Rules are evaluated automatically during checkout.</p>
+          </div>
+
+          <span className="rules-count">3 rules</span>
+        </div>
+
+        {/* Rule 1 */}
+        <div className="discount-rule-card">
+
+          <div className="rule-card-top">
+            <div className="rule-title-area">
+              <div className="rule-icon">%</div>
+
+              <div>
+                <h4>Standard Discount Approval</h4>
+                <p>Automatically approve low-risk discounts</p>
+              </div>
+            </div>
+
+            <div className="rule-actions">
+              <span className="rule-status active">
+                <span className="status-dot"></span>
+                Active
+              </span>
+
+              <button className="icon-button" title="Edit rule">
+                ✎
+              </button>
+
+              <button className="icon-button danger" title="Delete rule">
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="rule-condition">
+            <span className="condition-label">IF</span>
+
+            <div className="condition-chip">
+              Discount <strong>≤ 5%</strong>
+            </div>
+
+            <span className="condition-operator">AND</span>
+
+            <div className="condition-chip">
+              Add-on Value <strong>≤ ₹2,000</strong>
+            </div>
+
+            <span className="condition-arrow">→</span>
+
+            <div className="action-chip approve">
+              ✓ Auto Approve
+            </div>
+          </div>
+
+        </div>
+
+        {/* Rule 2 */}
+        <div className="discount-rule-card">
+
+          <div className="rule-card-top">
+            <div className="rule-title-area">
+              <div className="rule-icon">₹</div>
+
+              <div>
+                <h4>High Value Cart</h4>
+                <p>Require approval for high-value discounts</p>
+              </div>
+            </div>
+
+            <div className="rule-actions">
+              <span className="rule-status active">
+                <span className="status-dot"></span>
+                Active
+              </span>
+
+              <button className="icon-button" title="Edit rule">
+                ✎
+              </button>
+
+              <button className="icon-button danger" title="Delete rule">
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="rule-condition">
+            <span className="condition-label">IF</span>
+
+            <div className="condition-chip">
+              Cart Value <strong>≥ ₹5,000</strong>
+            </div>
+
+            <span className="condition-operator">AND</span>
+
+            <div className="condition-chip">
+              Discount <strong>&gt; 5%</strong>
+            </div>
+
+            <span className="condition-arrow">→</span>
+
+            <div className="action-chip review">
+              ⏳ Merchant Approval
+            </div>
+          </div>
+
+        </div>
+
+        {/* Rule 3 */}
+        <div className="discount-rule-card">
+
+          <div className="rule-card-top">
+            <div className="rule-title-area">
+              <div className="rule-icon">★</div>
+
+              <div>
+                <h4>AI Upsell Protection</h4>
+                <p>Limit discounts generated by the Growth Agent</p>
+              </div>
+            </div>
+
+            <div className="rule-actions">
+              <span className="rule-status active">
+                <span className="status-dot"></span>
+                Active
+              </span>
+
+              <button className="icon-button" title="Edit rule">
+                ✎
+              </button>
+
+              <button className="icon-button danger" title="Delete rule">
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="rule-condition">
+            <span className="condition-label">IF</span>
+
+            <div className="condition-chip">
+              AI Discount <strong>≤ 10%</strong>
+            </div>
+
+            <span className="condition-operator">AND</span>
+
+            <div className="condition-chip">
+              AI Add-ons <strong>≤ 3</strong>
+            </div>
+
+            <span className="condition-arrow">→</span>
+
+            <div className="action-chip approve">
+              ✓ Allow AI Action
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Empty / Add Rule CTA */}
+      <div className="rule-footer">
+        <div>
+          <strong>Need another automation?</strong>
+          <p>Create a custom rule for your Growth Agent.</p>
+        </div>
+
+        <button className="secondary-button">
+          + Create Custom Rule
+        </button>
+      </div>
+
+    </section>
+  </div>
+)}
+
+         {activePage === 'settings' && (
+  <div className="page-view">
+    <section className="cart-panel settings-page">
+
+      {/* HEADER */}
+      <header className="orders-header settings-header">
+        <div>
+          <span className="section-kicker">CONFIGURATION</span>
+          <h2 className="orders-title">Growth Agent Settings</h2>
+          <p className="settings-subtitle">
+            Configure how Growth AI recommends products, discounts,
+            and cart expansions.
+          </p>
+        </div>
+
+        <div className="settings-status">
+          <span className="status-dot"></span>
+          Agent Active
+        </div>
+      </header>
+
+      {/* SETTINGS CONTENT */}
+      <div className="settings-content">
+
+        {/* GROWTH POLICY */}
+        <div className="settings-section">
+
+          <div className="settings-section-header">
+            <div>
+              <span className="settings-kicker">GROWTH POLICY</span>
+              <h3>Recommendation Limits</h3>
+              <p>
+                Define the boundaries Growth AI must follow when
+                generating recommendations.
+              </p>
+            </div>
+          </div>
+
+          <div className="settings-grid">
+
+            <div className="setting-item">
+              <label>
+                Maximum Add-ons
+                <span>?</span>
+              </label>
+
+              <p className="setting-description">
+                Maximum number of products the agent can recommend.
+              </p>
+
+              <div className="input-with-unit">
+                <input
+                  type="number"
+                  defaultValue={3}
+                  min="1"
+                  max="10"
+                />
+                <span>items</span>
+              </div>
+            </div>
+
+            <div className="setting-item">
+              <label>
+                Maximum Discount
+                <span>?</span>
+              </label>
+
+              <p className="setting-description">
+                Maximum discount the Growth Agent can apply.
+              </p>
+
+              <div className="input-with-unit">
+                <input
+                  type="number"
+                  defaultValue={15}
+                  min="0"
+                  max="50"
+                />
+                <span>%</span>
+              </div>
+            </div>
+
+            <div className="setting-item">
+              <label>
+                Maximum Cart Increase
+                <span>?</span>
+              </label>
+
+              <p className="setting-description">
+                Maximum percentage increase allowed from AI
+                recommendations.
+              </p>
+
+              <div className="input-with-unit">
+                <input
+                  type="number"
+                  defaultValue={30}
+                  min="0"
+                  max="100"
+                />
+                <span>%</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+
+        {/* CATEGORY PREFERENCES */}
+        <div className="settings-section">
+
+          <div className="settings-section-header">
+            <div>
+              <span className="settings-kicker">PRODUCT PREFERENCES</span>
+              <h3>Preferred Categories</h3>
+              <p>
+                Select the product categories Growth AI should
+                prioritize when generating recommendations.
+              </p>
+            </div>
+          </div>
+
+          <div className="category-options">
+
+            <label className="category-option">
+              <input type="checkbox" defaultChecked />
+              <div>
+                <strong>Cookware</strong>
+                <span>Pans, pots and cooking equipment</span>
+              </div>
+            </label>
+
+            <label className="category-option">
+              <input type="checkbox" defaultChecked />
+              <div>
+                <strong>Knives</strong>
+                <span>Kitchen knives and accessories</span>
+              </div>
+            </label>
+
+            <label className="category-option">
+              <input type="checkbox" defaultChecked />
+              <div>
+                <strong>Utensils</strong>
+                <span>Kitchen tools and serving items</span>
+              </div>
+            </label>
+
+          </div>
+        </div>
+
+
+        {/* AGENT BEHAVIOR */}
+        <div className="settings-section">
+
+          <div className="settings-section-header">
+            <div>
+              <span className="settings-kicker">AGENT BEHAVIOR</span>
+              <h3>Automation Controls</h3>
+              <p>
+                Control how aggressively the Growth Agent operates.
+              </p>
+            </div>
+          </div>
+
+          <div className="automation-settings">
+
+            <div className="automation-row">
+              <div>
+                <strong>Enable Growth Agent</strong>
+                <span>
+                  Allow AI to generate product recommendations.
+                </span>
+              </div>
+
+              <label className="toggle">
+                <input type="checkbox" defaultChecked />
+                <span className="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div className="automation-row">
+              <div>
+                <strong>AI Upsell Recommendations</strong>
+                <span>
+                  Automatically suggest relevant add-ons during checkout.
+                </span>
+              </div>
+
+              <label className="toggle">
+                <input type="checkbox" defaultChecked />
+                <span className="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div className="automation-row">
+              <div>
+                <strong>Require Merchant Approval</strong>
+                <span>
+                  Send recommendations above policy limits to approval.
+                </span>
+              </div>
+
+              <label className="toggle">
+                <input type="checkbox" defaultChecked />
+                <span className="toggle-slider"></span>
+              </label>
+            </div>
+
+          </div>
+        </div>
+
+
+        {/* SAVE AREA */}
+        <div className="settings-footer">
+
+          <div className="settings-save-info">
+            <strong>Growth Agent Configuration</strong>
+            <span>
+              Changes will apply to future AI recommendations.
+            </span>
+          </div>
+
+          <div className="settings-actions">
+            <button
+              className="secondary-button"
+              onClick={() => window.location.reload()}
+            >
+              Reset
+            </button>
+
+            <button
+              className="primary-button settings-save-button"
+              onClick={() => {
+                alert("Growth Agent settings saved successfully.");
+              }}
+            >
+              Save Settings
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+    </section>
+  </div>
+)}
 
         </main>
       </div>

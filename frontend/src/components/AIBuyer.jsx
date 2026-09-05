@@ -9,17 +9,6 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
-  // Mandate form state
-  const [showMandateForm, setShowMandateForm] = useState(false);
-  const [mandateForm, setMandateForm] = useState({
-    max_order_amount: 5000,
-    max_item_price: 2000,
-    max_daily_spend: 10000,
-    allowed_categories: ['Kitchen', 'Cookware'],
-    auto_pay_enabled: true,
-    expires_at: ''
-  });
-  
   // AI request state
   const [buyerRequest, setBuyerRequest] = useState('');
   const [buyerResult, setBuyerResult] = useState(null);
@@ -49,36 +38,6 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const createMandate = async () => {
-    try {
-      setError('');
-      const result = await api('/api/mandates', {
-        method: 'POST',
-        body: JSON.stringify({
-          cart_id: cartId,
-          ...mandateForm
-        })
-      });
-      setMandate(result.mandate);
-      setShowMandateForm(false);
-    } catch (err) {
-      setError(err.message || 'Failed to create mandate');
-    }
-  };
-
-  const toggleAutoPay = async () => {
-    if (!mandate) return;
-    try {
-      const endpoint = mandate.auto_pay_enabled 
-        ? `/api/mandates/${mandate.id}/disable`
-        : `/api/mandates/${mandate.id}/enable`;
-      await api(endpoint, { method: 'POST' });
-      loadMandate();
-    } catch (err) {
-      setError('Failed to toggle auto-pay');
     }
   };
 
@@ -122,7 +81,29 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
         ]);
       }
     } catch (err) {
-      setError(err.message || 'Unable to process buyer request');
+      // Extract error detail from structured error responses
+      let errorMessage = 'Unable to process buyer request';
+      
+      if (err.detail) {
+        if (typeof err.detail === 'string') {
+          errorMessage = err.detail;
+        } else if (typeof err.detail === 'object') {
+          if (err.detail.message) {
+            errorMessage = err.detail.message;
+            if (err.detail.code) {
+              errorMessage = `${err.detail.code}: ${errorMessage}`;
+            }
+          } else if (err.detail.code) {
+            errorMessage = err.detail.code;
+          } else {
+            errorMessage = JSON.stringify(err.detail);
+          }
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setBuyerLoading(false);
     }
@@ -226,7 +207,31 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
         status: 'in_progress'
       }]);
 
-      setShowCheckoutModal(true);
+      // Use AI Buyer checkout endpoint for mandate validation
+      try {
+        const checkoutResponse = await api(`/api/checkout/${cartId}/ai-buyer`, {
+          method: 'POST',
+        });
+        
+        setExecutionTrace(prev => [...prev, {
+          step: 'Mandate validation passed',
+          detail: 'AI Buyer mandate approved for checkout',
+          status: 'completed'
+        }]);
+        
+        setShowCheckoutModal(true);
+      } catch (err) {
+        const errorMessage = err.detail || err.message || err.toString();
+        setError(errorMessage);
+        setExecutionTrace(prev => [...prev, {
+          step: 'Mandate validation failed',
+          detail: errorMessage,
+          status: 'failed'
+        }]);
+        setCheckoutLoading(false);
+        setVerificationInProgress(false);
+        return;
+      }
 
     } catch (err) {
       const errorMessage = err.detail || err.message || err.toString();
@@ -263,8 +268,8 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
     });
 
     setExecutionTrace(prev => [...prev, {
-      step: 'Autonomous purchase complete',
-      detail: 'AI Buyer completed autonomous purchase under mandate',
+      step: 'AI-Initiated purchase complete',
+      detail: 'AI Buyer selected products under mandate and customer completed payment',
       status: 'completed'
     }]);
 
@@ -306,7 +311,7 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
           <p className="section-kicker">AUTONOMOUS AI BUYER</p>
           <h2>🤖 AI Buyer</h2>
           <p className="ai-buyer-description">
-            Configure your spending authority and let the AI make purchases within your limits
+            System-Defined Buyer Authority - Enter your natural-language purchase intent
           </p>
         </div>
         <div className={`ai-buyer-status ${mandate?.enabled ? 'active' : 'inactive'}`}>
@@ -321,81 +326,8 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
       
       <section className="mandate-section">
         <div className="section-header">
-          <h3>BUYER MANDATE</h3>
-          {!mandate && (
-            <button 
-              className="primary-button"
-              onClick={() => setShowMandateForm(true)}
-            >
-              Create Mandate
-            </button>
-          )}
+          <h3>SYSTEM-DEFINED BUYER AUTHORITY</h3>
         </div>
-
-        {showMandateForm && (
-          <div className="mandate-form">
-            <div className="form-row">
-              <label>Maximum Order Amount</label>
-              <input
-                type="number"
-                value={mandateForm.max_order_amount}
-                onChange={(e) => setMandateForm({...mandateForm, max_order_amount: Number(e.target.value)})}
-                placeholder="₹"
-              />
-            </div>
-            <div className="form-row">
-              <label>Maximum Item Price</label>
-              <input
-                type="number"
-                value={mandateForm.max_item_price}
-                onChange={(e) => setMandateForm({...mandateForm, max_item_price: Number(e.target.value)})}
-                placeholder="₹"
-              />
-            </div>
-            <div className="form-row">
-              <label>Daily Spending Limit</label>
-              <input
-                type="number"
-                value={mandateForm.max_daily_spend}
-                onChange={(e) => setMandateForm({...mandateForm, max_daily_spend: Number(e.target.value)})}
-                placeholder="₹"
-              />
-            </div>
-            <div className="form-row">
-              <label>Allowed Categories</label>
-              <select
-                multiple
-                value={mandateForm.allowed_categories}
-                onChange={(e) => setMandateForm({...mandateForm, allowed_categories: Array.from(e.target.selectedOptions, opt => opt.value)})}
-              >
-                <option value="Kitchen">Kitchen</option>
-                <option value="Cookware">Cookware</option>
-                <option value="Knives">Knives</option>
-                <option value="Utensils">Utensils</option>
-              </select>
-            </div>
-            <div className="form-row checkbox">
-              <input
-                type="checkbox"
-                checked={mandateForm.auto_pay_enabled}
-                onChange={(e) => setMandateForm({...mandateForm, auto_pay_enabled: e.target.checked})}
-              />
-              <label>Enable Autonomous Payments</label>
-            </div>
-            <div className="form-row">
-              <label>Mandate Expiry (optional)</label>
-              <input
-                type="date"
-                value={mandateForm.expires_at}
-                onChange={(e) => setMandateForm({...mandateForm, expires_at: e.target.value})}
-              />
-            </div>
-            <div className="form-actions">
-              <button onClick={() => setShowMandateForm(false)}>Cancel</button>
-              <button className="primary-button" onClick={createMandate}>Create Mandate</button>
-            </div>
-          </div>
-        )}
 
         {mandate && (
           <div className="mandate-display">
@@ -431,29 +363,18 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
                   {mandate.auto_pay_enabled ? '✓ ENABLED' : '○ DISABLED'}
                 </strong>
               </div>
-              {mandate.expires_at && (
-                <div className="mandate-detail">
-                  <span>Expires</span>
-                  <strong>{new Date(mandate.expires_at).toLocaleDateString()}</strong>
-                </div>
-              )}
             </div>
 
-            <div className="mandate-actions">
-              <button onClick={toggleAutoPay}>
-                {mandate.auto_pay_enabled ? 'Disable Auto-Pay' : 'Enable Auto-Pay'}
-              </button>
-            </div>
+            <p className="system-note">
+              These limits are system-defined and cannot be modified.
+            </p>
           </div>
         )}
 
-        {!mandate && !showMandateForm && (
+        {!mandate && (
           <div className="no-mandate">
-            <p>No autonomous buying authorization configured.</p>
-            <p>Create a mandate to allow the AI Buyer to purchase within limits.</p>
-            <button className="primary-button" onClick={() => setShowMandateForm(true)}>
-              Create Buyer Mandate
-            </button>
+            <p>System-Defined Buyer Authority is being initialized...</p>
+            <p>Please refresh if this message persists.</p>
           </div>
         )}
       </section>
@@ -571,8 +492,8 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
           {buyerResult.mandate?.approved && buyerResult.policy_status === 'APPROVED' && mandate?.auto_pay_enabled && (
             <div className="autonomous-checkout">
               <div className="checkout-header">
-                <h3>🤖 AUTONOMOUS CHECKOUT</h3>
-                <p>The AI Buyer is authorized to complete this purchase within your spending mandate.</p>
+                <h3>🤖 AI-INITIATED CHECKOUT</h3>
+                <p>The AI Buyer selected products within your spending authority. Complete the secure Razorpay payment.</p>
               </div>
 
               <div className="checkout-summary">
@@ -603,7 +524,7 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
                 disabled={checkoutLoading}
                 onClick={autonomousCheckout}
               >
-                {checkoutLoading ? 'Processing...' : 'Buy Autonomously'}
+                {checkoutLoading ? 'Processing...' : 'Complete Purchase with AI Selection'}
               </button>
             </div>
           )}
@@ -611,14 +532,13 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
           {/* Blocked States */}
           {!buyerResult.mandate?.approved && (
             <div className="checkout-blocked">
-              <h3>⚠ AUTONOMOUS PURCHASE BLOCKED</h3>
-              <p>The AI Buyer cannot complete this purchase.</p>
+              <h3>⚠ AI-INITIATED PURCHASE BLOCKED</h3>
+              <p>The AI Buyer selection violates your spending authority.</p>
               <div className="block-reason">
                 <strong>Reason:</strong>
                 <p>{buyerResult.mandate?.violations?.join(', ') || 'Mandate not approved'}</p>
               </div>
               <p>No payment was initiated.</p>
-              <button onClick={() => setShowMandateForm(true)}>Update Mandate</button>
             </div>
           )}
 
@@ -667,8 +587,8 @@ export default function AIBuyer({ cartId, cart, onRefresh }) {
         <section className="checkout-success">
           <div className="success-content">
             <div className="success-icon">✅</div>
-            <h2>AUTONOMOUS PURCHASE COMPLETE</h2>
-            <p>Your AI Buyer successfully completed this purchase within your authorization.</p>
+            <h2>AI-INITIATED PURCHASE COMPLETE</h2>
+            <p>Your AI Buyer selected products within your authorization and you completed the secure Razorpay payment.</p>
             
             <div className="success-details">
               <div className="success-item">

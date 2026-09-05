@@ -210,10 +210,29 @@ export default function CheckoutModal({
         'Payment status could not be confirmed'
       );
 
-      setDetail(
-        error.message ||
-        'Something went wrong while processing the payment result.'
-      );
+      // Extract error detail from structured error responses
+      let errorDetail = 'Something went wrong while processing the payment result.';
+      
+      if (error.detail) {
+        if (typeof error.detail === 'string') {
+          errorDetail = error.detail;
+        } else if (typeof error.detail === 'object') {
+          if (error.detail.message) {
+            errorDetail = error.detail.message;
+            if (error.detail.code) {
+              errorDetail = `${error.detail.code}: ${errorDetail}`;
+            }
+          } else if (error.detail.code) {
+            errorDetail = error.detail.code;
+          } else {
+            errorDetail = JSON.stringify(error.detail);
+          }
+        }
+      } else if (error.message) {
+        errorDetail = error.message;
+      }
+
+      setDetail(errorDetail);
     }
   };
 
@@ -359,9 +378,28 @@ export default function CheckoutModal({
               'Payment verification failed'
             );
 
-            const errorDetail = error.detail || error.message || 
-              'The payment was received, but verification could not be completed. ' +
+            // Extract error detail from structured error responses
+            let errorDetail = 'The payment was received, but verification could not be completed. ' +
               'Your payment has been preserved for manual reconciliation.';
+            
+            if (error.detail) {
+              if (typeof error.detail === 'string') {
+                errorDetail = error.detail;
+              } else if (typeof error.detail === 'object') {
+                if (error.detail.message) {
+                  errorDetail = error.detail.message;
+                  if (error.detail.code) {
+                    errorDetail = `${error.detail.code}: ${errorDetail}`;
+                  }
+                } else if (error.detail.code) {
+                  errorDetail = error.detail.code;
+                } else {
+                  errorDetail = JSON.stringify(error.detail);
+                }
+              }
+            } else if (error.message) {
+              errorDetail = error.message;
+            }
 
             setDetail(errorDetail);
           }
@@ -426,9 +464,17 @@ export default function CheckoutModal({
         if (typeof error.detail === 'string') {
           errorDetail = error.detail;
         } else if (typeof error.detail === 'object') {
-          errorDetail = error.detail.message || 
-                        error.detail.code || 
-                        JSON.stringify(error.detail);
+          // Handle structured error responses from FastAPI
+          if (error.detail.message) {
+            errorDetail = error.detail.message;
+            if (error.detail.code) {
+              errorDetail = `${error.detail.code}: ${errorDetail}`;
+            }
+          } else if (error.detail.code) {
+            errorDetail = error.detail.code;
+          } else {
+            errorDetail = JSON.stringify(error.detail);
+          }
         }
       } else if (error.message) {
         errorDetail = error.message;

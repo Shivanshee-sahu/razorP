@@ -205,6 +205,43 @@ async def lifespan(_: FastAPI):
     seed()
     with connect() as conn:
         conn.execute("INSERT OR IGNORE INTO carts(id,created_at) VALUES ('demo-cart',?)", (now(),))
+        
+        # Create or update system-defined buyer mandate for demo-cart
+        import json
+        existing_mandate = conn.execute(
+            "SELECT id FROM buyer_mandates WHERE cart_id='demo-cart' AND enabled=1"
+        ).fetchone()
+        
+        mandate_id = existing_mandate[0] if existing_mandate else f"mandate_{uuid4().hex[:12]}"
+        timestamp = now()
+        categories_json = json.dumps(["cookware", "kitchen", "kitchen tools", "utensils"])
+        
+        if existing_mandate:
+            # Update existing mandate to system-defined values
+            conn.execute(
+                """
+                UPDATE buyer_mandates
+                SET max_order_amount=?, max_item_price=?, max_daily_spend=?, 
+                    allowed_categories=?, auto_pay_enabled=?, updated_at=?
+                WHERE id=?
+                """,
+                (2000, 1500, 5000, categories_json, 1, timestamp, mandate_id)
+            )
+            print("[SYSTEM] Updated system-defined buyer mandate for demo-cart")
+        else:
+            # Create new mandate
+            conn.execute(
+                """
+                INSERT INTO buyer_mandates (
+                    id, cart_id, enabled, max_order_amount, max_item_price, 
+                    max_daily_spend, allowed_categories, auto_pay_enabled, 
+                    created_at, updated_at
+                )
+                VALUES (?, ?, 1, ?, ?, ?, ?, 1, ?, ?)
+                """,
+                (mandate_id, "demo-cart", 2000, 1500, 5000, categories_json, timestamp, timestamp)
+            )
+            print("[SYSTEM] Created system-defined buyer mandate for demo-cart")
     yield
 
 app = FastAPI(title="Copper & Char Growth Agent", lifespan=lifespan)
@@ -413,42 +450,136 @@ def get_cart(cart_id: str):
     with connect() as conn:
         return cart_data(conn, cart_id)
 
+
 @app.post("/api/cart/{cart_id}/items")
 def update_cart(cart_id: str, item: CartItemInput):
     with connect() as conn:
+
+        # Make sure cart exists
         cart_data(conn, cart_id)
+
+        # --------------------------------------------------------
+        # Load product
+        # --------------------------------------------------------
         product = conn.execute(
-            "SELECT stock, price FROM catalog WHERE id=?", 
+            """
+            SELECT stock, price
+            FROM catalog
+            WHERE id=?
+            """,
             (item.product_id,)
         ).fetchone()
+
         if not product:
-            raise HTTPException(404, "Product not found")
-        
+            raise HTTPException(
+                status_code=404,
+                detail="Product not found"
+            )
+
         prod_dict = dict(product)
+
+        # --------------------------------------------------------
+        # Check Growth Agent approval
+        # --------------------------------------------------------
         growth_approval = conn.execute(
-            "SELECT status FROM growth_approval_requests WHERE cart_id=? AND product_id=? ORDER BY id DESC LIMIT 1",
+            """
+            SELECT status
+            FROM growth_approval_requests
+            WHERE cart_id=?
+              AND product_id=?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
             (cart_id, item.product_id),
         ).fetchone()
-        if item.qty > 0 and growth_approval and growth_approval["status"] != "APPROVED":
-            raise HTTPException(403, "Merchant approval required before this Growth add-on can be added.")
-        if item.qty > prod_dict.get("stock", 0):
-            raise HTTPException(400, "Requested quantity exceeds stock")
-        
-        if item.qty == 0:
-            conn.execute("DELETE FROM cart_items WHERE cart_id=? AND product_id=?", (cart_id, item.product_id))
-        else:
-            approved = conn.execute("SELECT final_price FROM growth_approval_requests WHERE cart_id=? AND product_id=? AND status='APPROVED' ORDER BY id DESC LIMIT 1", (cart_id, item.product_id)).fetchone()
-            unit_price = approved["final_price"] if approved else prod_dict["price"]
-            conn.execute(
-                "INSERT INTO cart_items(cart_id,product_id,qty,unit_price) VALUES (?,?,?,?) "
-                "ON CONFLICT(cart_id,product_id) DO UPDATE SET qty=excluded.qty, unit_price=excluded.unit_price",
-                (cart_id, item.product_id, item.qty, unit_price)
+
+        if (
+            item.qty > 0
+            and growth_approval
+            and growth_approval["status"] != "APPROVED"
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Merchant approval required before this "
+                    "Growth add-on can be added."
+                )
             )
+
+        # --------------------------------------------------------
+        # Check stock
+        # --------------------------------------------------------
+        if item.qty > prod_dict.get("stock", 0):
+            raise HTTPException(
+                status_code=400,
+                detail="Requested quantity exceeds stock"
+            )
+
+        # --------------------------------------------------------
+        # Remove item
+        # --------------------------------------------------------
+        if item.qty == 0:
+
+            conn.execute(
+                """
+                DELETE FROM cart_items
+                WHERE cart_id=?
+                  AND product_id=?
+                """,
+                (cart_id, item.product_id)
+            )
+
+        # --------------------------------------------------------
+        # Add/update item
+        # --------------------------------------------------------
+        else:
+
+            approved = conn.execute(
+                """
+                SELECT final_price
+                FROM growth_approval_requests
+                WHERE cart_id=?
+                  AND product_id=?
+                  AND status='APPROVED'
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (cart_id, item.product_id)
+            ).fetchone()
+
+            unit_price = (
+                approved["final_price"]
+                if approved
+                else prod_dict["price"]
+            )
+
+            conn.execute(
+                """
+                INSERT INTO cart_items
+                    (cart_id, product_id, qty, unit_price)
+                VALUES (?, ?, ?, ?)
+
+                ON CONFLICT(cart_id, product_id)
+                DO UPDATE SET
+                    qty=excluded.qty,
+                    unit_price=excluded.unit_price
+                """,
+                (
+                    cart_id,
+                    item.product_id,
+                    item.qty,
+                    unit_price
+                )
+            )
+
         return cart_data(conn, cart_id)
 
-# ========================================================
+
+# ============================================================
 # AI BUYER ENDPOINTS
-# ========================================================
+# ============================================================
+
+
 # ============================================================
 # BUYER MANDATE
 # ============================================================
@@ -457,6 +588,7 @@ def update_cart(cart_id: str, item: CartItemInput):
 def create_buyer_mandate(body: BuyerMandateInput):
 
     try:
+
         mandate = create_mandate(
             cart_id=body.cart_id,
             max_order_amount=body.max_order_amount,
@@ -468,6 +600,7 @@ def create_buyer_mandate(body: BuyerMandateInput):
         )
 
         with connect() as conn:
+
             log(
                 conn,
                 body.cart_id,
@@ -533,60 +666,145 @@ def disable_buyer_mandate(mandate_id: str):
         "success": True,
         "mandate": mandate,
     }
+
+
+# ============================================================
+# AI BUYER CATALOG
+# ============================================================
+
 @app.get("/api/agent/catalog")
 def get_agent_catalog():
+
     if not check_permission("AIBuyer", "READ_CATALOG"):
-        raise HTTPException(403, "Permission denied for READ_CATALOG")
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied for READ_CATALOG"
+        )
+
     with connect() as conn:
-        items = rows(conn.execute("SELECT id, name, category, price, stock, description FROM catalog WHERE active=1 AND ai_buyer_enabled=1").fetchall())
-    
+
+        items = rows(
+            conn.execute(
+                """
+                SELECT
+                    id,
+                    name,
+                    category,
+                    price,
+                    stock,
+                    description
+                FROM catalog
+                WHERE active=1
+                  AND ai_buyer_enabled=1
+                """
+            ).fetchall()
+        )
+
     products = []
+
     for item in items:
-        price = item.get("price") if item.get("price") is not None else item.get("price_inr", 0)
+
+        price = (
+            item.get("price")
+            if item.get("price") is not None
+            else item.get("price_inr", 0)
+        )
+
+        category = (
+            item.get("category")
+            or "cookware"
+        )
+
         products.append({
             "id": item["id"],
             "name": item["name"],
             "price": price,
             "currency": "INR",
-            "category": item.get("category") or "cookware",
-            "description": item.get("description") or "Premium culinary equipment",
+            "category": category,
+            "description": (
+                item.get("description")
+                or "Premium culinary equipment"
+            ),
             "stock": item["stock"],
+
             "attributes": {
-                "material": (item.get("category") or "cookware").lower(),
+                "material": category.lower(),
                 "durable": True,
                 "dishwasher_safe": False,
                 "oven_safe": True,
                 "induction_compatible": True,
             },
-            "use_cases": ["family cooking", "daily cooking", "meal preparation"],
-            "suitable_for": ["2-4 people", "4-6 people", "family cooking"],
-            "compatibility": ["cookware", "stovetop", "daily use"],
+
+            "use_cases": [
+                "family cooking",
+                "daily cooking",
+                "meal preparation"
+            ],
+
+            "suitable_for": [
+                "2-4 people",
+                "4-6 people",
+                "family cooking"
+            ],
+
+            "compatibility": [
+                "cookware",
+                "stovetop",
+                "daily use"
+            ],
         })
-    return {"merchant": {"name": "Copper & Char", "currency": "INR"}, "products": products}
+
+    return {
+        "merchant": {
+            "name": "Copper & Char",
+            "currency": "INR"
+        },
+        "products": products
+    }
+
+
+# ============================================================
+# AI BUYER
+# ============================================================
 
 @app.post("/api/agent/buyer")
-def process_buyer_request(payload: BuyerRequestInput):
+def process_buyer_request(
+    payload: BuyerRequestInput
+):
 
-    # ============================================================
+    # ========================================================
     # 1. CHECK AI BUYER PERMISSION
-    # ============================================================
-    if not check_permission("AIBuyer", "READ_CATALOG"):
+    # ========================================================
+
+    if not check_permission(
+        "AIBuyer",
+        "READ_CATALOG"
+    ):
         raise HTTPException(
-            403,
-            "Permission denied for READ_CATALOG"
+            status_code=403,
+            detail="Permission denied for READ_CATALOG"
         )
 
-    # ============================================================
+    # ========================================================
     # 2. LOAD + CHECK BUYER MANDATE
-    # ============================================================
+    # ========================================================
+
     mandate = None
 
     if payload.mandate_id:
-        mandate = get_mandate(payload.mandate_id)
+
+        mandate = get_mandate(
+            payload.mandate_id
+        )
+
     else:
-        mandate = get_cart_mandate(payload.cart_id)
+
+        mandate = get_cart_mandate(
+            payload.cart_id
+        )
 
     if not mandate:
+
         raise HTTPException(
             status_code=403,
             detail=(
@@ -595,10 +813,55 @@ def process_buyer_request(payload: BuyerRequestInput):
             )
         )
 
-    # ============================================================
+    # ========================================================
     # 3. LOAD CATALOG
-    # ============================================================
+    # ========================================================
+
     with connect() as conn:
+
+        total_rows = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM catalog
+            """
+        ).fetchone()["count"]
+
+        active_rows = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM catalog
+            WHERE active=1
+            """
+        ).fetchone()["count"]
+
+        ai_rows = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM catalog
+            WHERE active=1
+              AND ai_buyer_enabled=1
+            """
+        ).fetchone()["count"]
+
+        # Debug rows
+        debug_rows = rows(
+            conn.execute(
+                """
+                SELECT
+                    id,
+                    name,
+                    price,
+                    category,
+                    stock,
+                    active,
+                    ai_buyer_enabled
+                FROM catalog
+                LIMIT 5
+                """
+            ).fetchall()
+        )
+
+        # Actual AI Buyer catalog
         catalog_items = rows(
             conn.execute(
                 """
@@ -610,79 +873,260 @@ def process_buyer_request(payload: BuyerRequestInput):
             ).fetchall()
         )
 
-    # ============================================================
+    # ========================================================
+    # CATALOG DEBUG
+    # ========================================================
+
+    print("\n================ AI BUYER CATALOG DEBUG ================")
+
+    print(
+        "Total catalog rows:",
+        total_rows
+    )
+
+    print(
+        "Active catalog rows:",
+        active_rows
+    )
+
+    print(
+        "AI Buyer enabled rows:",
+        ai_rows
+    )
+
+    print(
+        "Loaded catalog items:",
+        len(catalog_items)
+    )
+
+    print("\nFirst catalog rows:")
+
+    for item in debug_rows:
+        print(item)
+
+    print("=========================================================\n")
+
+    # ========================================================
     # 4. FILTER CATALOG AGAINST BUYER MANDATE
-    # ============================================================
-    
-    # Initialize trace early
+    # ========================================================
+
     trace = []
-    
-    # For filtering, consider only NEW items being added, not existing cart
-    # The final mandate validation will check the total including existing cart
-    current_cart_total = 0  # Start from 0 for filtering new items only
-    
+
+    # IMPORTANT:
+    # Preserve original count before replacing catalog_items
+    original_catalog_count = len(
+        catalog_items
+    )
+
+    # We are discovering NEW products.
+    # Existing cart total is validated later.
+    current_cart_total = 0
+
     trace.append({
         "step": "Loading buyer mandate",
-        "detail": f"Mandate {mandate['id']} loaded with max_order_amount={mandate.get('max_order_amount')}, max_item_price={mandate.get('max_item_price')}",
+
+        "detail": (
+            f"Mandate {mandate['id']} loaded with "
+            f"max_order_amount="
+            f"{mandate.get('max_order_amount')}, "
+            f"max_item_price="
+            f"{mandate.get('max_item_price')}"
+        ),
+
         "status": "completed"
     })
-    
-    eligible_catalog, ineligible_catalog = filter_catalog_by_mandate(
-        catalog_items,
-        mandate,
-        current_cart_total
+
+    # ========================================================
+    # MANDATE FILTER DEBUG
+    # ========================================================
+
+    print(
+        "\n================ MANDATE FILTER DEBUG ================"
     )
-    
+
+    print(
+        "Catalog BEFORE filter:",
+        len(catalog_items)
+    )
+
+    print("\nMANDATE:")
+
+    print(
+        json.dumps(
+            mandate,
+            indent=2,
+            default=str
+        )
+    )
+
+    # ========================================================
+    # ACTUAL FILTER
+    # ========================================================
+
+    eligible_catalog, ineligible_catalog = (
+        filter_catalog_by_mandate(
+            catalog_items,
+            mandate,
+            current_cart_total
+        )
+    )
+
+    print(
+        "\nEligible AFTER filter:",
+        len(eligible_catalog)
+    )
+
+    print(
+        "Ineligible AFTER filter:",
+        len(ineligible_catalog)
+    )
+
+    # ========================================================
+    # PRINT ELIGIBLE PRODUCTS
+    # ========================================================
+
+    print("\nELIGIBLE PRODUCTS:")
+
+    for item in eligible_catalog:
+
+        print(
+            item.get("id"),
+            "|",
+            item.get("name"),
+            "| ₹",
+            item.get("price"),
+            "|",
+            item.get("category"),
+            "| stock:",
+            item.get("stock")
+        )
+
+    # ========================================================
+    # PRINT INELIGIBLE PRODUCTS
+    # ========================================================
+
+    print("\nINELIGIBLE PRODUCTS:")
+
+    for item in ineligible_catalog:
+
+        print(
+            
+        item["id"],
+        "|",
+        item["name"],
+        "| ₹",
+        item["price"],
+        "|",
+        item["category"],
+        "| REASONS:",
+        item.get("ineligibility_reasons", [])
+        )
+
+    print(
+        "=======================================================\n"
+    )
+
     trace.append({
         "step": "Filtering catalog against mandate",
-        "detail": f"Filtered {len(catalog_items)} products to {len(eligible_catalog)} eligible products under mandate",
+
+        "detail": (
+            f"Filtered "
+            f"{original_catalog_count} products to "
+            f"{len(eligible_catalog)} eligible products "
+            f"under mandate"
+        ),
+
         "status": "completed"
     })
-    
-    # Use only eligible catalog for recommendations
+
+    # ========================================================
+    # NO ELIGIBLE PRODUCTS
+    # ========================================================
+
+    if not eligible_catalog:
+
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "NO_ELIGIBLE_PRODUCTS",
+
+                "message": (
+                    "No products in the catalog match "
+                    "your buyer mandate constraints."
+                ),
+
+                "mandate_constraints": {
+                    "max_order_amount":
+                        mandate.get("max_order_amount"),
+
+                    "max_item_price":
+                        mandate.get("max_item_price"),
+
+                    "allowed_categories":
+                        mandate.get("allowed_categories"),
+
+                    "max_daily_spend":
+                        mandate.get("max_daily_spend"),
+                },
+
+                # IMPORTANT:
+                # Report original catalog size,
+                # not filtered size.
+                "catalog_size":
+                    original_catalog_count,
+
+                "ineligible_count":
+                    len(ineligible_catalog),
+
+                "trace":
+                    trace,
+            }
+        )
+
+    # ========================================================
+    # USE ONLY ELIGIBLE PRODUCTS
+    # ========================================================
+
     catalog_items = eligible_catalog
 
-    # ============================================================
-    # 4. UNDERSTAND USER REQUEST
-    # ============================================================
-    requirements = extract_requirements(
-        payload.request
-    )
+    # ========================================================
+    # 5. UNDERSTAND USER REQUEST
+    # ========================================================
 
-    budget = requirements["budget"]
+    requirements = extract_requirements(payload.request)
 
-    # ============================================================
-    # 5. GENERATE RECOMMENDATIONS
-    # ============================================================
+    # Keep the extracted budget, but make the endpoint resilient if the
+    # recommendation engine does not return one.
+    budget = requirements.get("budget")
+    if budget is None:
+        budget = mandate.get("max_order_amount") or 0
+    budget = float(budget)
+
+    # ========================================================
+    # 6. GENERATE RECOMMENDATIONS
+    # ========================================================
 
     recommended = []
     selected_ids = set()
     current_subtotal = 0
 
-    # ------------------------------------------------------------
-    # Extract explicit product request
-    # ------------------------------------------------------------
-    requirements = extract_requirements(
-        payload.request,
-        {"budget": budget},
+    # extract_requirements() is intentionally called only once.
+    requested_product_id = requirements.get("product_id")
+
+    requested_quantity = (
+        requirements.get(
+            "quantity",
+            1
+        )
     )
 
-    requested_product_id = requirements.get(
-        "product_id"
-    )
-
-    requested_quantity = requirements.get(
-        "quantity",
-        1
-    )
-
-    # Make sure quantity is always valid
+    # Make sure quantity is valid
     if requested_quantity < 1:
         requested_quantity = 1
 
-    # ============================================================
-    # 5A. HANDLE EXPLICIT PRODUCT REQUEST
-    # ============================================================
+    # ========================================================
+    # 6A. HANDLE EXPLICIT PRODUCT REQUEST
+    # ========================================================
 
     if requested_product_id:
 
@@ -690,100 +1134,182 @@ def process_buyer_request(payload: BuyerRequestInput):
             (
                 item
                 for item in catalog_items
-                if str(item.get("id", "")).lower()
-                == str(requested_product_id).lower()
+
+                if str(
+                    item.get("id", "")
+                ).lower()
+                ==
+                str(
+                    requested_product_id
+                ).lower()
             ),
-            None,
+            None
         )
 
-        # --------------------------------------------------------
-        # Requested product does not exist
-        # --------------------------------------------------------
+        # ----------------------------------------------------
+        # Requested product not found
+        # ----------------------------------------------------
+
         if not requested_item:
+
             raise HTTPException(
                 status_code=404,
                 detail=(
                     f"Requested product "
                     f"'{requested_product_id}' "
-                    f"was not found in the catalog."
-                ),
+                    f"was not found in the eligible catalog."
+                )
             )
+
+        # ----------------------------------------------------
+        # Product price
+        # ----------------------------------------------------
 
         price = (
             requested_item.get("price")
             if requested_item.get("price") is not None
-            else requested_item.get("price_inr", 0)
+            else requested_item.get(
+                "price_inr",
+                0
+            )
         )
 
         price = float(price)
 
+        # ----------------------------------------------------
+        # Product stock
+        # ----------------------------------------------------
+
         stock = int(
-            requested_item.get("stock", 0) or 0
+            requested_item.get(
+                "stock",
+                0
+            ) or 0
         )
 
-        # --------------------------------------------------------
-        # Requested quantity exceeds stock
-        # --------------------------------------------------------
+        # ----------------------------------------------------
+        # Stock validation
+        # ----------------------------------------------------
+
         if stock < requested_quantity:
+
             raise HTTPException(
                 status_code=400,
                 detail=(
                     f"Requested quantity "
-                    f"{requested_quantity} exceeds available "
-                    f"stock {stock} for "
+                    f"{requested_quantity} exceeds "
+                    f"available stock {stock} for "
                     f"'{requested_item.get('name', requested_product_id)}'."
-                ),
+                )
             )
+
+        # ----------------------------------------------------
+        # Calculate requested total
+        # ----------------------------------------------------
 
         requested_total = (
             price * requested_quantity
         )
-        
-        # --------------------------------------------------------
-        # Check mandate constraints for explicit request
-        # --------------------------------------------------------
-        max_order_amount = mandate.get("max_order_amount")
-        max_daily_spend = mandate.get("max_daily_spend")
-        
-        within_mandate_limit = True
-        within_daily_limit = True
-        
-        if max_order_amount is not None:
-            within_mandate_limit = requested_total <= max_order_amount
-        
-        if max_daily_spend is not None:
-            current_daily_spend = get_daily_spend(mandate["cart_id"])
-            within_daily_limit = (current_daily_spend + requested_total) <= max_daily_spend
-        
-        # Even for explicit requests, enforce mandate constraints
-        if not within_mandate_limit:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Requested product price ₹{price:,} exceeds "
-                    f"mandate order limit ₹{max_order_amount:,}."
-                ),
+
+        # ----------------------------------------------------
+        # Mandate limits
+        # ----------------------------------------------------
+
+        max_order_amount = (
+            mandate.get(
+                "max_order_amount"
             )
-        
-        if not within_daily_limit:
+        )
+
+        max_item_price = (
+            mandate.get(
+                "max_item_price"
+            )
+        )
+
+        max_daily_spend = (
+            mandate.get(
+                "max_daily_spend"
+            )
+        )
+
+        # ----------------------------------------------------
+        # Item price limit
+        # ----------------------------------------------------
+
+        if (
+            max_item_price is not None
+            and price > max_item_price
+        ):
+
             raise HTTPException(
                 status_code=403,
                 detail=(
-                    f"Requested product would exceed daily spending limit "
-                    f"₹{max_daily_spend:,}."
-                ),
+                    f"Product price ₹{price:,.0f} "
+                    f"exceeds the mandate's maximum "
+                    f"item price of "
+                    f"₹{max_item_price:,.0f}."
+                )
             )
 
-        # --------------------------------------------------------
-        # Calculate deterministic match score
-        # --------------------------------------------------------
+        # ----------------------------------------------------
+        # Order limit
+        # ----------------------------------------------------
+
+        if (
+            max_order_amount is not None
+            and requested_total > max_order_amount
+        ):
+
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Requested total ₹"
+                    f"{requested_total:,.0f} exceeds "
+                    f"mandate order limit "
+                    f"₹{max_order_amount:,.0f}."
+                )
+            )
+
+        # ----------------------------------------------------
+        # Daily spending limit
+        # ----------------------------------------------------
+
+        if max_daily_spend is not None:
+
+            current_daily_spend = (
+                get_daily_spend(
+                    mandate["cart_id"]
+                )
+            )
+
+            if (
+                current_daily_spend
+                + requested_total
+                > max_daily_spend
+            ):
+
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Requested product would "
+                        "exceed the daily spending "
+                        f"limit ₹{max_daily_spend:,.0f}."
+                    )
+                )
+
+        # ====================================================
+        # DETERMINISTIC MATCH SCORE
+        # ====================================================
+
         score = calculate_match_score(
             requested_item,
             payload.request,
             budget,
             recommended,
         )
-
+        
+        # Continue with your existing code here...
         # --------------------------------------------------------
         # Explicit product gets priority
         # --------------------------------------------------------
@@ -851,22 +1377,24 @@ def process_buyer_request(payload: BuyerRequestInput):
 
     if not requested_product_id:
 
-        # Get mandate constraints for bundle construction
+        # Product discovery must not consume the daily-spend budget.
+        # Daily spend is an authorization check performed by
+        # validate_mandate() after the final bundle has been selected.
         max_order_amount = mandate.get("max_order_amount")
-        max_daily_spend = mandate.get("max_daily_spend")
-        
-        # Calculate remaining daily spend authority
-        remaining_daily = max_daily_spend if max_daily_spend else None
-        if max_daily_spend is not None:
-            current_daily_spend = get_daily_spend(mandate["cart_id"])
-            remaining_daily = max_daily_spend - current_daily_spend
-        
-        order_limit_str = f"₹{max_order_amount:,}" if max_order_amount else "unlimited"
-        daily_str = f"₹{remaining_daily:,}" if remaining_daily else "unlimited"
-        
+
+        order_limit_str = (
+            f"₹{max_order_amount:,.0f}"
+            if max_order_amount is not None
+            else "unlimited"
+        )
+
         trace.append({
             "step": "Constructing authorized bundle",
-            "detail": f"User budget: ₹{budget:,}, Mandate order limit: {order_limit_str}, Daily remaining: {daily_str}",
+            "detail": (
+                f"User budget: ₹{budget:,.0f}, "
+                f"Mandate order limit: {order_limit_str}. "
+                "Daily spend will be checked during final mandate validation."
+            ),
             "status": "completed"
         })
 
@@ -900,25 +1428,78 @@ def process_buyer_request(payload: BuyerRequestInput):
             )
 
             # ----------------------------------------------------
+            # Intent-aware fallback matching
+            # ----------------------------------------------------
+            # The deterministic matcher can score natural-language
+            # requests too low when user terminology and catalog
+            # categories use different labels. This fallback only
+            # affects ranking/discovery; it does NOT bypass mandate
+            # validation because the catalog was already filtered.
+            request_lower = payload.request.lower()
+            item_name = str(item.get("name", "")).lower()
+            item_category = str(item.get("category", "")).lower()
+
+            fallback_score = float(score.get("score", 0))
+
+            cookware_words = {
+                "pan", "fry pan", "frying pan", "skillet",
+                "kadai", "wok", "saucepan", "pot",
+                "cookware", "cooking"
+            }
+
+            if any(word in request_lower for word in cookware_words):
+                if any(word in item_name for word in cookware_words):
+                    fallback_score = max(fallback_score, 95)
+                elif item_category in {
+                    "kitchen tools",
+                    "kitchen",
+                    "utensils",
+                }:
+                    # Closest eligible alternatives when the exact
+                    # cookware item is outside the buyer mandate.
+                    fallback_score = max(fallback_score, 60)
+
+            elif requirements.get("category") == "cookware":
+                if item_category in {
+                    "kitchen tools",
+                    "cookware",
+                    "kitchen",
+                    "utensils",
+                }:
+                    fallback_score = max(fallback_score, 60)
+
+            elif any(
+                word in request_lower
+                for word in ["cook", "cooking", "kitchen", "meal", "utensil"]
+            ):
+                if item_category in {
+                    "kitchen tools",
+                    "cookware",
+                    "kitchen",
+                    "utensils",
+                    "kitchen storage",
+                }:
+                    fallback_score = max(fallback_score, 60)
+
+            score["score"] = fallback_score
+
+            # ----------------------------------------------------
             # Only accept valid generic recommendations
             # ----------------------------------------------------
-            # Must satisfy BOTH user budget AND mandate constraints
+            # Check stock, user budget and per-order authority here.
+            # Daily spending is intentionally checked only by the
+            # final validate_mandate() call below.
             within_user_budget = (current_subtotal + price) <= budget
-            within_mandate_limit = True
-            within_daily_limit = True
-            
-            if max_order_amount is not None:
-                within_mandate_limit = (current_subtotal + price) <= max_order_amount
-            
-            if remaining_daily is not None:
-                within_daily_limit = (current_subtotal + price) <= remaining_daily
+            within_mandate_limit = (
+                max_order_amount is None
+                or (current_subtotal + price) <= max_order_amount
+            )
 
             if (
                 stock > 0
                 and score["score"] >= 55
                 and within_user_budget
                 and within_mandate_limit
-                and within_daily_limit
             ):
 
                 recommended.append(
@@ -964,14 +1545,47 @@ def process_buyer_request(payload: BuyerRequestInput):
     # 5C. SAFETY CHECK
     # ============================================================
 
+    print("\n================ RECOMMENDATION DEBUG ================")
+    print("User request:", payload.request)
+    print("Extracted requirements:", requirements)
+    print("Budget:", budget)
+    print("Requested product ID:", requested_product_id)
+    print("Requested quantity:", requested_quantity)
+    print("Recommended count:", len(recommended))
+    print("Recommended:", recommended)
+    print("Current subtotal:", current_subtotal)
+    print("Eligible catalog count:", len(eligible_catalog))
+    print("=======================================================\n")
+
     if not recommended:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "No suitable products were found "
-                "for the buyer request."
-            ),
-        )
+        # Provide detailed information about why no products were found
+        if len(eligible_catalog) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "NO_ELIGIBLE_PRODUCTS",
+                    "message": "No products in the catalog match your buyer mandate constraints.",
+                    "mandate_constraints": {
+                        "max_order_amount": mandate.get("max_order_amount"),
+                        "max_item_price": mandate.get("max_item_price"),
+                        "allowed_categories": mandate.get("allowed_categories"),
+                        "max_daily_spend": mandate.get("max_daily_spend")
+                    },
+                    "ineligible_count": len(ineligible_catalog),
+                    "catalog_size": len(catalog_items) + len(ineligible_catalog)
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "NO_SUITABLE_PRODUCTS",
+                    "message": f"No products matched your request '{payload.request}' within the eligible catalog of {len(eligible_catalog)} items.",
+                    "eligible_count": len(eligible_catalog),
+                    "user_budget": budget,
+                    "request": payload.request
+                }
+            )
 
     # ============================================================
     # 6. EXCLUDED PRODUCTS
@@ -990,7 +1604,7 @@ def process_buyer_request(payload: BuyerRequestInput):
             budget,
             recommended,
         )
-
+        
         codes = []
 
         # --------------------------------------------------------
@@ -1089,6 +1703,7 @@ def process_buyer_request(payload: BuyerRequestInput):
         amount=int(current_subtotal),
         categories=categories,
         item_prices=item_prices,
+        require_auto_pay=True,  # AI Buyer requires auto-pay for autonomous operations
     )
 
     # ============================================================
@@ -3196,7 +3811,83 @@ def checkout(cart_id: str):
             raise HTTPException(400, "Cart is empty")
 
         # ============================================================
-        # 2. LOAD BUYER MANDATE
+        # 2. CREATE RAZORPAY ORDER
+        # ============================================================
+        # Note: Buyer mandate validation is only for AI Buyer autonomous operations
+        # Normal user checkout does not require a buyer mandate
+        try:
+            order = create_order(
+                cart["total"],
+                f"cc_{cart_id}_{uuid4().hex[:10]}"
+            )
+
+        except RuntimeError as exc:
+            raise HTTPException(503, str(exc)) from exc
+
+        except razorpay.errors.BadRequestError as exc:
+            message = (
+                getattr(exc, "description", None)
+                or str(exc)
+                or "Razorpay rejected the order request."
+            )
+
+            raise HTTPException(
+                400,
+                f"Razorpay rejected the test order: {message}"
+            ) from exc
+
+        except razorpay.errors.ServerError as exc:
+            raise HTTPException(
+                502,
+                "Razorpay test service is temporarily unavailable. Please retry."
+            ) from exc
+
+        except Exception as exc:
+            raise HTTPException(
+                502,
+                f"Razorpay order creation failed "
+                f"({type(exc).__name__}). Check test credentials."
+            ) from exc
+
+        # ============================================================
+        # 3. AUDIT
+        # ============================================================
+        log(
+            conn,
+            cart_id,
+            "Execute",
+            "ok",
+            f"Created Razorpay test order {order['id']}.",
+            cart["total"]
+        )
+
+        return {
+            "order": order,
+            "key_id": (
+                os.getenv("RAZORPAY_KEY_ID_PUBLIC")
+                or os.getenv("RAZORPAY_KEY_ID")
+            ),
+        }
+
+# ========================================================
+# AI BUYER CHECKOUT (WITH MANDATE VALIDATION)
+# ========================================================
+
+@app.post("/api/checkout/{cart_id}/ai-buyer")
+def ai_buyer_checkout(cart_id: str):
+    """Checkout for AI Buyer operations with mandatory mandate validation."""
+    with connect() as conn:
+
+        # ============================================================
+        # 1. LOAD CART
+        # ============================================================
+        cart = cart_data(conn, cart_id)
+
+        if cart["total"] <= 0:
+            raise HTTPException(400, "Cart is empty")
+
+        # ============================================================
+        # 2. LOAD BUYER MANDATE (REQUIRED FOR AI BUYER)
         # ============================================================
         mandate = get_cart_mandate(cart_id)
 
@@ -3206,7 +3897,7 @@ def checkout(cart_id: str):
                 cart_id,
                 "POLICY",
                 "blocked",
-                "Checkout blocked: no buyer mandate exists.",
+                "AI Buyer checkout blocked: no buyer mandate exists.",
                 cart["total"]
             )
 
@@ -3214,7 +3905,7 @@ def checkout(cart_id: str):
                 status_code=403,
                 detail={
                     "code": "NO_MANDATE",
-                    "message": "Checkout blocked: no active buyer mandate found. Please create a buyer mandate with auto-pay enabled."
+                    "message": "AI Buyer checkout blocked: no active buyer mandate found."
                 }
             )
 
@@ -3241,13 +3932,14 @@ def checkout(cart_id: str):
                 categories.append(product["category"] or "")
 
         # ============================================================
-        # 4. VALIDATE BUYER MANDATE
+        # 4. VALIDATE BUYER MANDATE (WITH AUTO-PAY REQUIREMENT)
         # ============================================================
         mandate_result = validate_mandate(
             mandate=mandate,
             amount=int(cart["total"]),
             categories=categories,
             item_prices=item_prices,
+            require_auto_pay=True,  # AI Buyer requires auto-pay
         )
 
         if not mandate_result["approved"]:
@@ -3261,7 +3953,7 @@ def checkout(cart_id: str):
                 cart_id,
                 "POLICY",
                 "blocked",
-                f"Checkout blocked by buyer mandate: {reason}",
+                f"AI Buyer checkout blocked by buyer mandate: {reason}",
                 cart["total"]
             )
 
@@ -3269,7 +3961,7 @@ def checkout(cart_id: str):
                 status_code=403,
                 detail={
                     "code": "MANDATE_VALIDATION_FAILED",
-                    "message": "Checkout is not authorized by the active buyer mandate.",
+                    "message": "AI Buyer checkout is not authorized by the active buyer mandate.",
                     "status": mandate_result["status"],
                     "violations": mandate_result["violations"],
                     "mandate_id": mandate["id"],
@@ -3319,9 +4011,9 @@ def checkout(cart_id: str):
         log(
             conn,
             cart_id,
-            "Execute",
-            "ok",
-            f"Buyer mandate approved. Created Razorpay test order {order['id']}.",
+            "AI_BUYER",
+            "CHECKOUT_AUTHORIZED",
+            f"AI Buyer mandate approved. Created Razorpay test order {order['id']}.",
             cart["total"]
         )
 
@@ -3339,6 +4031,7 @@ def checkout(cart_id: str):
             },
             "policy_status": "APPROVED"
         }
+
 # ========================================================
 # FAILURE SIMULATION & AUDIT
 # ========================================================
@@ -3584,7 +4277,33 @@ def move_wishlist_to_cart(cart_id: str, product_id: str):
 # ========================================================
 # REVIEWS & RATINGS
 # ========================================================
+@app.get("/api/reviews/reviewable/{cart_id}")
+def get_reviewable_products(cart_id: str):
+    with connect() as conn:
 
+        items = rows(conn.execute("""
+            SELECT
+                oi.id,
+                oi.order_id,
+                oi.product_id,
+                o.order_number,
+                o.cart_id,
+                o.status,
+                c.name AS product_name,
+                c.price,
+                c.image_url,
+                c.category
+            FROM order_items oi
+            JOIN orders o
+                ON oi.order_id = o.id
+            JOIN catalog c
+                ON oi.product_id = c.id
+            WHERE o.cart_id = ?
+              AND UPPER(o.status) = 'PAID'
+            ORDER BY o.created_at DESC
+        """, (cart_id,)).fetchall())
+
+        return items
 @app.post("/api/reviews")
 def create_review(body: ReviewInput):
     with connect() as conn:

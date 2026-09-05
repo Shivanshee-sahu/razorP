@@ -40,13 +40,19 @@ def create_mandate(
 ) -> dict:
 
     if max_order_amount <= 0:
-        raise ValueError("max_order_amount must be greater than 0")
+        raise ValueError(
+            "max_order_amount must be greater than 0"
+        )
 
     if max_item_price is not None and max_item_price <= 0:
-        raise ValueError("max_item_price must be greater than 0")
+        raise ValueError(
+            "max_item_price must be greater than 0"
+        )
 
     if max_daily_spend is not None and max_daily_spend <= 0:
-        raise ValueError("max_daily_spend must be greater than 0")
+        raise ValueError(
+            "max_daily_spend must be greater than 0"
+        )
 
     mandate_id = f"mandate_{uuid4().hex[:12]}"
     timestamp = now()
@@ -57,9 +63,16 @@ def create_mandate(
 
     with connect() as conn:
 
-        # Make sure cart exists
+        # ----------------------------------------------------
+        # MAKE SURE CART EXISTS
+        # ----------------------------------------------------
+
         cart = conn.execute(
-            "SELECT id FROM carts WHERE id=?",
+            """
+            SELECT id
+            FROM carts
+            WHERE id=?
+            """,
             (cart_id,)
         ).fetchone()
 
@@ -68,6 +81,10 @@ def create_mandate(
                 status_code=404,
                 detail=f"Cart '{cart_id}' not found"
             )
+
+        # ----------------------------------------------------
+        # CREATE MANDATE
+        # ----------------------------------------------------
 
         conn.execute(
             """
@@ -128,6 +145,10 @@ def get_mandate(mandate_id: str) -> dict:
 
     mandate = dict(row)
 
+    # --------------------------------------------------------
+    # PARSE CATEGORIES
+    # --------------------------------------------------------
+
     try:
         mandate["allowed_categories"] = json.loads(
             mandate.get("allowed_categories") or "[]"
@@ -135,9 +156,16 @@ def get_mandate(mandate_id: str) -> dict:
     except Exception:
         mandate["allowed_categories"] = []
 
-    mandate["enabled"] = bool(mandate["enabled"])
+    # --------------------------------------------------------
+    # NORMALIZE BOOLEAN VALUES
+    # --------------------------------------------------------
+
+    mandate["enabled"] = bool(
+        mandate.get("enabled")
+    )
+
     mandate["auto_pay_enabled"] = bool(
-        mandate["auto_pay_enabled"]
+        mandate.get("auto_pay_enabled")
     )
 
     return mandate
@@ -147,7 +175,9 @@ def get_mandate(mandate_id: str) -> dict:
 # GET ACTIVE MANDATE FOR CART
 # ============================================================
 
-def get_cart_mandate(cart_id: str) -> dict | None:
+def get_cart_mandate(
+    cart_id: str
+) -> dict | None:
 
     with connect() as conn:
 
@@ -168,6 +198,10 @@ def get_cart_mandate(cart_id: str) -> dict | None:
 
     mandate = dict(row)
 
+    # --------------------------------------------------------
+    # PARSE CATEGORIES
+    # --------------------------------------------------------
+
     try:
         mandate["allowed_categories"] = json.loads(
             mandate.get("allowed_categories") or "[]"
@@ -175,9 +209,16 @@ def get_cart_mandate(cart_id: str) -> dict | None:
     except Exception:
         mandate["allowed_categories"] = []
 
-    mandate["enabled"] = bool(mandate["enabled"])
+    # --------------------------------------------------------
+    # NORMALIZE BOOLEAN VALUES
+    # --------------------------------------------------------
+
+    mandate["enabled"] = bool(
+        mandate.get("enabled")
+    )
+
     mandate["auto_pay_enabled"] = bool(
-        mandate["auto_pay_enabled"]
+        mandate.get("auto_pay_enabled")
     )
 
     return mandate
@@ -187,7 +228,9 @@ def get_cart_mandate(cart_id: str) -> dict | None:
 # ENABLE MANDATE
 # ============================================================
 
-def enable_mandate(mandate_id: str) -> dict:
+def enable_mandate(
+    mandate_id: str
+) -> dict:
 
     with connect() as conn:
 
@@ -198,7 +241,10 @@ def enable_mandate(mandate_id: str) -> dict:
                 updated_at=?
             WHERE id=?
             """,
-            (now(), mandate_id)
+            (
+                now(),
+                mandate_id
+            )
         )
 
         if result.rowcount == 0:
@@ -214,7 +260,9 @@ def enable_mandate(mandate_id: str) -> dict:
 # DISABLE MANDATE
 # ============================================================
 
-def disable_mandate(mandate_id: str) -> dict:
+def disable_mandate(
+    mandate_id: str
+) -> dict:
 
     with connect() as conn:
 
@@ -225,7 +273,10 @@ def disable_mandate(mandate_id: str) -> dict:
                 updated_at=?
             WHERE id=?
             """,
-            (now(), mandate_id)
+            (
+                now(),
+                mandate_id
+            )
         )
 
         if result.rowcount == 0:
@@ -241,28 +292,43 @@ def disable_mandate(mandate_id: str) -> dict:
 # EXPIRATION CHECK
 # ============================================================
 
-def check_expiration(mandate: dict) -> tuple[bool, str]:
+def check_expiration(
+    mandate: dict
+) -> tuple[bool, str]:
 
     expires_at = mandate.get("expires_at")
 
+    # No expiration configured
     if not expires_at:
         return True, "Mandate has no expiration."
 
     try:
+
         expiry = datetime.fromisoformat(
-            expires_at.replace("Z", "+00:00")
+            str(expires_at).replace(
+                "Z",
+                "+00:00"
+            )
         )
 
+        # Treat timezone-less timestamps as UTC
         if expiry.tzinfo is None:
             expiry = expiry.replace(
                 tzinfo=timezone.utc
             )
 
         if datetime.now(timezone.utc) >= expiry:
-            return False, "Buyer mandate has expired."
+            return (
+                False,
+                "Buyer mandate has expired."
+            )
 
-    except ValueError:
-        return False, "Buyer mandate has an invalid expiration date."
+    except (ValueError, TypeError):
+
+        return (
+            False,
+            "Buyer mandate has an invalid expiration date."
+        )
 
     return True, "Mandate is active."
 
@@ -271,11 +337,15 @@ def check_expiration(mandate: dict) -> tuple[bool, str]:
 # DAILY SPENDING
 # ============================================================
 
-def get_daily_spend(cart_id: str) -> int:
+def get_daily_spend(
+    cart_id: str
+) -> int:
 
-    today = datetime.now(
-        timezone.utc
-    ).date().isoformat()
+    today = (
+        datetime.now(timezone.utc)
+        .date()
+        .isoformat()
+    )
 
     with connect() as conn:
 
@@ -287,10 +357,15 @@ def get_daily_spend(cart_id: str) -> int:
               AND status='PAID'
               AND substr(created_at, 1, 10)=?
             """,
-            (cart_id, today)
+            (
+                cart_id,
+                today
+            )
         ).fetchone()
 
-    return int(row["total"] or 0)
+    return int(
+        row["total"] or 0
+    )
 
 
 # ============================================================
@@ -302,16 +377,36 @@ def validate_categories(
     categories: list[str]
 ) -> tuple[bool, str]:
 
-    allowed = mandate.get("allowed_categories") or []
+    allowed = (
+        mandate.get("allowed_categories")
+        or []
+    )
 
-    # Empty list means all categories are allowed.
+    # --------------------------------------------------------
+    # EMPTY LIST = NO CATEGORY RESTRICTION
+    # --------------------------------------------------------
+
     if not allowed:
-        return True, "No category restriction configured."
+        return (
+            True,
+            "No category restriction configured."
+        )
+
+    # --------------------------------------------------------
+    # NORMALIZE ALLOWED CATEGORIES
+    # --------------------------------------------------------
 
     allowed_normalized = {
-        str(category).strip().lower()
+        str(category)
+        .strip()
+        .lower()
         for category in allowed
+        if str(category).strip()
     }
+
+    # --------------------------------------------------------
+    # CHECK EVERY CATEGORY
+    # --------------------------------------------------------
 
     for category in categories:
 
@@ -320,12 +415,17 @@ def validate_categories(
         ).strip().lower()
 
         if normalized not in allowed_normalized:
+
             return (
                 False,
-                f"Category '{category}' is not allowed by buyer mandate."
+                f"Category '{category}' is not allowed "
+                f"by buyer mandate."
             )
 
-    return True, "All categories are allowed."
+    return (
+        True,
+        "All categories are allowed."
+    )
 
 
 # ============================================================
@@ -337,42 +437,58 @@ def validate_mandate(
     amount: int,
     categories: list[str] | None = None,
     item_prices: list[int] | None = None,
+    require_auto_pay: bool = False,
 ) -> dict:
 
     violations = []
 
-    # --------------------------------------------------------
+    # ========================================================
     # ENABLED
-    # --------------------------------------------------------
+    # ========================================================
 
     if not mandate.get("enabled"):
+
         violations.append(
             "Buyer mandate is disabled."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # EXPIRATION
-    # --------------------------------------------------------
+    # ========================================================
 
     valid_expiry, expiry_reason = check_expiration(
         mandate
     )
 
     if not valid_expiry:
-        violations.append(expiry_reason)
 
-    # --------------------------------------------------------
+        violations.append(
+            expiry_reason
+        )
+
+    # ========================================================
     # AUTO PAYMENT
-    # --------------------------------------------------------
+    # ========================================================
+    #
+    # Normal/manual Razorpay checkout does NOT require
+    # auto_pay_enabled.
+    #
+    # Autonomous AI Buyer checkout DOES require it.
+    #
+    # ========================================================
 
-    if not mandate.get("auto_pay_enabled"):
+    if (
+        require_auto_pay
+        and not mandate.get("auto_pay_enabled")
+    ):
+
         violations.append(
             "Autonomous payment is not enabled."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # MAX ORDER AMOUNT
-    # --------------------------------------------------------
+    # ========================================================
 
     max_order_amount = mandate.get(
         "max_order_amount"
@@ -382,14 +498,16 @@ def validate_mandate(
         max_order_amount is not None
         and amount > max_order_amount
     ):
+
         violations.append(
             f"Order amount INR {amount:,} exceeds "
-            f"mandate limit INR {max_order_amount:,}."
+            f"mandate limit INR "
+            f"{max_order_amount:,}."
         )
 
-    # --------------------------------------------------------
+    # ========================================================
     # MAX ITEM PRICE
-    # --------------------------------------------------------
+    # ========================================================
 
     max_item_price = mandate.get(
         "max_item_price"
@@ -400,26 +518,43 @@ def validate_mandate(
         for price in item_prices or []:
 
             if price > max_item_price:
+
                 violations.append(
                     f"Item price INR {price:,} exceeds "
-                    f"mandate item limit INR {max_item_price:,}."
+                    f"mandate item limit INR "
+                    f"{max_item_price:,}."
                 )
 
-    # --------------------------------------------------------
+    # ========================================================
     # CATEGORY
-    # --------------------------------------------------------
+    # ========================================================
 
-    category_ok, category_reason = validate_categories(
-        mandate,
-        categories or []
+    category_ok, category_reason = (
+        validate_categories(
+            mandate,
+            categories or []
+        )
     )
 
     if not category_ok:
-        violations.append(category_reason)
 
-    # --------------------------------------------------------
+        violations.append(
+            category_reason
+        )
+
+    # ========================================================
     # DAILY SPENDING
-    # --------------------------------------------------------
+    # ========================================================
+    #
+    # IMPORTANT:
+    # Daily spending is checked ONLY when validating the
+    # actual proposed purchase.
+    #
+    # It is intentionally NOT checked while filtering the
+    # catalog because catalog discovery should not hide
+    # otherwise valid products.
+    #
+    # ========================================================
 
     max_daily_spend = mandate.get(
         "max_daily_spend"
@@ -431,21 +566,25 @@ def validate_mandate(
             mandate["cart_id"]
         )
 
-        if (
+        potential_daily_spend = (
             current_daily_spend + amount
-            > max_daily_spend
-        ):
+        )
+
+        if potential_daily_spend > max_daily_spend:
+
             violations.append(
                 f"Daily spending limit exceeded. "
-                f"Already spent INR {current_daily_spend:,}; "
-                f"this order would reach "
-                f"INR {current_daily_spend + amount:,}, "
-                f"while the limit is INR {max_daily_spend:,}."
+                f"Already spent INR "
+                f"{current_daily_spend:,}; "
+                f"this order would reach INR "
+                f"{potential_daily_spend:,}, "
+                f"while the limit is INR "
+                f"{max_daily_spend:,}."
             )
 
-    # --------------------------------------------------------
+    # ========================================================
     # FINAL RESULT
-    # --------------------------------------------------------
+    # ========================================================
 
     if violations:
 
@@ -472,93 +611,230 @@ def filter_catalog_by_mandate(
     current_cart_total: int = 0
 ) -> tuple[list[dict], list[dict]]:
     """
-    Filter catalog items to only those that can be purchased under the mandate.
-    
+    Filter catalog items against the buyer mandate.
+
+    This function determines which products are eligible
+    for consideration by the AI Buyer.
+
+    It checks:
+
+    - stock
+    - maximum item price
+    - allowed categories
+    - maximum order amount
+    - mandate expiration
+    - mandate enabled status
+
+    IMPORTANT:
+
+    Daily spending is NOT checked here.
+
+    Daily spending is checked later when the AI Buyer
+    has selected an actual product/cart and calls
+    validate_mandate(...).
+
+    auto_pay_enabled is also NOT checked here.
+
     Returns:
-        (eligible_items, ineligible_items)
+        (
+            eligible_items,
+            ineligible_items
+        )
     """
-    
+
     eligible = []
     ineligible = []
-    
-    max_order_amount = mandate.get("max_order_amount")
-    max_item_price = mandate.get("max_item_price")
-    allowed_categories = mandate.get("allowed_categories") or []
-    max_daily_spend = mandate.get("max_daily_spend")
-    
-    # Get current daily spend if daily limit is configured
-    current_daily_spend = 0
-    if max_daily_spend is not None:
-        current_daily_spend = get_daily_spend(mandate["cart_id"])
-    
-    # Normalize allowed categories for comparison
+
+    # ========================================================
+    # MANDATE LIMITS
+    # ========================================================
+
+    max_order_amount = mandate.get(
+        "max_order_amount"
+    )
+
+    max_item_price = mandate.get(
+        "max_item_price"
+    )
+
+    allowed_categories = (
+        mandate.get("allowed_categories")
+        or []
+    )
+
+    # ========================================================
+    # NORMALIZE CATEGORIES
+    # ========================================================
+
     allowed_normalized = {
-        str(cat).strip().lower() 
-        for cat in allowed_categories
-    } if allowed_categories else None
-    
+        str(category)
+        .strip()
+        .lower()
+        for category in allowed_categories
+        if str(category).strip()
+    }
+
+    # ========================================================
+    # MANDATE STATUS
+    # ========================================================
+
+    valid_expiry, _ = check_expiration(
+        mandate
+    )
+
+    mandate_enabled = bool(
+        mandate.get("enabled")
+    )
+
+    # ========================================================
+    # PROCESS EVERY CATALOG ITEM
+    # ========================================================
+
     for item in catalog_items:
-        price = float(
-            item.get("price") if item.get("price") is not None 
+
+        # ----------------------------------------------------
+        # PRICE
+        # ----------------------------------------------------
+
+        raw_price = (
+            item.get("price")
+            if item.get("price") is not None
             else item.get("price_inr", 0)
         )
-        
-        category = str(item.get("category") or "").strip().lower()
-        stock = int(item.get("stock", 0) or 0)
-        
-        # Check each constraint
+
+        try:
+            price = float(
+                raw_price or 0
+            )
+        except (TypeError, ValueError):
+            price = 0.0
+
+        # ----------------------------------------------------
+        # CATEGORY
+        # ----------------------------------------------------
+
+        category = str(
+            item.get("category") or ""
+        ).strip().lower()
+
+        # ----------------------------------------------------
+        # STOCK
+        # ----------------------------------------------------
+
+        try:
+            stock = int(
+                item.get("stock", 0) or 0
+            )
+        except (TypeError, ValueError):
+            stock = 0
+
+        # ----------------------------------------------------
+        # REASONS
+        # ----------------------------------------------------
+
         reasons = []
-        
-        # Stock check
+
+        # ====================================================
+        # STOCK CHECK
+        # ====================================================
+
         if stock <= 0:
-            reasons.append("OUT_OF_STOCK")
-        
-        # Max item price check
-        if max_item_price is not None and price > max_item_price:
-            reasons.append(f"ITEM_PRICE_EXCEEDS_LIMIT_{max_item_price}")
-        
-        # Category check - use partial matching for flexibility
+
+            reasons.append(
+                "OUT_OF_STOCK"
+            )
+
+        # ====================================================
+        # MAX ITEM PRICE CHECK
+        # ====================================================
+
+        if (
+            max_item_price is not None
+            and price > max_item_price
+        ):
+
+            reasons.append(
+                f"ITEM_PRICE_EXCEEDS_LIMIT_"
+                f"{max_item_price}"
+            )
+
+        # ====================================================
+        # CATEGORY CHECK
+        # ====================================================
+
         if allowed_normalized:
-            category_allowed = False
-            for allowed_cat in allowed_normalized:
-                # Check if allowed category is contained in product category or vice versa
-                if allowed_cat in category or category in allowed_cat:
-                    category_allowed = True
-                    break
+
+            category_allowed = any(
+                allowed_category in category
+                or category in allowed_category
+                for allowed_category
+                in allowed_normalized
+            )
+
             if not category_allowed:
-                reasons.append(f"CATEGORY_NOT_ALLOWED_{category}")
-        
-        # Max order amount check (considering current cart)
+
+                reasons.append(
+                    f"CATEGORY_NOT_ALLOWED_"
+                    f"{category or 'unknown'}"
+                )
+
+        # ====================================================
+        # MAX ORDER AMOUNT CHECK
+        # ====================================================
+
         if max_order_amount is not None:
-            potential_total = current_cart_total + price
+
+            potential_total = (
+                current_cart_total + price
+            )
+
             if potential_total > max_order_amount:
-                reasons.append(f"WOULD_EXCEED_ORDER_LIMIT_{max_order_amount}")
-        
-        # Daily spending check
-        if max_daily_spend is not None:
-            potential_daily = current_daily_spend + price
-            if potential_daily > max_daily_spend:
-                reasons.append(f"WOULD_EXCEED_DAILY_LIMIT_{max_daily_spend}")
-        
-        # Check expiration
-        valid_expiry, expiry_reason = check_expiration(mandate)
+
+                reasons.append(
+                    f"WOULD_EXCEED_ORDER_LIMIT_"
+                    f"{max_order_amount}"
+                )
+
+        # ====================================================
+        # EXPIRATION CHECK
+        # ====================================================
+
         if not valid_expiry:
-            reasons.append("MANDATE_EXPIRED")
-        
-        # Check if mandate is enabled
-        if not mandate.get("enabled"):
-            reasons.append("MANDATE_DISABLED")
-        
-        # Check if auto-pay is enabled
-        if not mandate.get("auto_pay_enabled"):
-            reasons.append("AUTO_PAY_DISABLED")
-        
+
+            reasons.append(
+                "MANDATE_EXPIRED"
+            )
+
+        # ====================================================
+        # ENABLED CHECK
+        # ====================================================
+
+        if not mandate_enabled:
+
+            reasons.append(
+                "MANDATE_DISABLED"
+            )
+
+        # ====================================================
+        # FINAL PRODUCT DECISION
+        # ====================================================
+
         if reasons:
+
             ineligible.append({
                 **item,
                 "ineligibility_reasons": reasons
             })
+
         else:
+
             eligible.append(item)
-    
-    return eligible, ineligible
+
+    # ========================================================
+    # RETURN
+    # ========================================================
+
+    return (
+        eligible,
+        ineligible
+    )
