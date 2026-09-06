@@ -19,11 +19,9 @@ Every money-related action is designed to be:
 
 ---
 
-# 🎯 Problem Statement
+## 🎯 Problem Statement
 
-AI agents are becoming capable of making recommendations and taking actions on behalf of users and businesses.
-
-However, agentic commerce introduces important challenges:
+AI agents are becoming capable of making recommendations and taking actions on behalf of users and businesses. However, agentic commerce introduces important challenges:
 
 - Can an AI modify a customer's cart without approval?
 - Can an AI apply arbitrary discounts?
@@ -32,12 +30,9 @@ However, agentic commerce introduces important challenges:
 - What happens if the AI service fails?
 - How can users understand why an AI made a decision?
 
-Most AI commerce systems focus primarily on intelligence.
-
-**Copper & Char focuses on both intelligence and governance.**
+Most AI commerce systems focus primarily on intelligence. **Copper & Char focuses on both intelligence and governance.**
 
 The system ensures that AI agents can participate in commerce while remaining constrained by:
-
 - Server-side policies
 - Approval workflows
 - Buyer mandates
@@ -46,12 +41,11 @@ The system ensures that AI agents can participate in commerce while remaining co
 
 ---
 
-# ✨ Key Features
+## ✨ Key Features
 
-## 📈 Merchant Growth Agent
+### 📈 Merchant Growth Agent
 
 The Merchant Growth Agent analyzes cart contents and identifies opportunities for:
-
 - Upselling
 - Cross-selling
 - Complementary product recommendations
@@ -59,7 +53,6 @@ The Merchant Growth Agent analyzes cart contents and identifies opportunities fo
 - Discount recommendations
 
 The agent generates structured proposals containing:
-
 - Recommended products
 - Reasons for recommendations
 - Proposed discounts
@@ -67,82 +60,76 @@ The agent generates structured proposals containing:
 - Revenue opportunities
 - Policy validation information
 
-### 🛡️ Growth Agent Guardrails
-
+#### 🛡️ Growth Agent Guardrails
 The Growth Agent operates within predefined server-side policies:
-
 - Maximum AI add-ons
 - Maximum discount percentage
 - Maximum cart increase
 - Auto-approval threshold
 
-AI-generated values are **never blindly trusted**.
-
-All financial actions are independently validated by the backend.
+*AI-generated values are **never blindly trusted**.* All financial actions are independently validated by the backend.
 
 ---
 
-# 🤖 Autonomous AI Buyer
+### 🤖 Autonomous AI Buyer
 
 The AI Buyer allows users to enter natural-language purchase requests.
 
-### Example Requests
-
+**Example Requests:**
 ```text
 Buy me a useful kitchen accessory under ₹2,000
 ```
-or:
+*or:*
 ```text
 I need a frying pan for daily cooking
 ```
-# The AI Buyer performs:
 
-Natural-language intent extraction
-Product discovery
-Catalog filtering
-Product compatibility scoring
-Budget validation
-Buyer mandate validation
-Policy validation
+**The AI Buyer performs:**
+- Natural-language intent extraction
+- Product discovery
+- Catalog filtering
+- Product compatibility scoring
+- Budget validation
+- Buyer mandate validation
+- Policy validation
 
-#  The system provides:
+**The system provides:**
+- Product recommendations
+- Recommendation reasoning
+- Budget impact
+- Decision traces
+- Mandate validation results
 
-Product recommendations
-Recommendation reasoning
-Budget impact
-Decision traces
-Mandate validation results
-# 🛡️ Buyer Mandate System
-
+#### 🛡️ Buyer Mandate System
 The AI Buyer operates within a predefined buyer authority.
 
-Example Mandate
-Constraint	Limit
-Maximum Order	₹2,000
-Maximum Item Price	₹1,500
-Daily Spending Limit	₹5,000
-Auto-Pay	Enabled
-Allowed Categories
-Cookware
-Kitchen
-Kitchen Tools
-Utensils
+**Example Mandate:**
+
+| Constraint | Limit |
+|---|---|
+| Maximum Order | ₹2,000 |
+| Maximum Item Price | ₹1,500 |
+| Daily Spending Limit | ₹5,000 |
+| Auto-Pay | Enabled |
+| Allowed Categories | Cookware, Kitchen, Kitchen Tools, Utensils |
 
 Before allowing a purchase to proceed, the backend validates:
+- ✅ Maximum order amount
+- ✅ Maximum item price
+- ✅ Allowed categories
+- ✅ Daily spending limits
+- ✅ Auto-pay authorization
+- ✅ Product availability
 
-✅ Maximum order amount
-✅ Maximum item price
-✅ Allowed categories
-✅ Daily spending limits
-✅ Auto-pay authorization
-✅ Product availability
+*The frontend cannot bypass these restrictions.*
 
-The frontend cannot bypass these restrictions.
+---
 
-# 🔐 Explainable & Bounded AI
+### 🔐 Explainable & Bounded AI
 
 Copper & Char follows a strict decision pipeline:
 
+```text
 AI Proposes
     ↓
 Backend Validates
@@ -154,72 +141,64 @@ Human Approval When Required
 Action Executes
     ↓
 Everything Is Audited
+```
 
-The AI model does not have direct authority over money-related actions.
+The AI model does not have direct authority over money-related actions. All critical decisions are independently validated on the server.
 
-All critical decisions are independently validated on the server.
-
-✅ Approval System
-
-Sensitive AI-generated actions can require merchant approval before execution.
-
-The approval workflow provides:
-
-Pending approval queue
-Proposal details
-Policy validation
-Merchant approval
-Merchant rejection
-Revalidation before execution
+#### ✅ Approval System
+Sensitive AI-generated actions can require merchant approval before execution. The approval workflow provides:
+- Pending approval queue
+- Proposal details
+- Policy validation
+- Merchant approval
+- Merchant rejection
+- Revalidation before execution
 
 This prevents AI agents from directly executing sensitive financial actions without authorization.
 
-# 📜 Complete Audit Trail
+---
 
-Copper & Char records important agent actions for transparency and explainability.
+### 📜 Complete Audit Trail
 
-The audit system logs:
+Copper & Char records important agent actions for transparency and explainability. The audit system logs:
+- AI agent execution
+- Recommendations generated
+- Policy decisions
+- Buyer mandate validation
+- Approval decisions
+- Cart modifications
+- Payment attempts & failures
+- Successful orders
 
-AI agent execution
-Recommendations generated
-Policy decisions
-Buyer mandate validation
-Approval decisions
-Cart modifications
-Payment attempts
-Payment failures
-Successful orders
+This allows users and merchants to understand what happened, why it happened, and whether the action was authorized.
 
-This allows users and merchants to understand:
+---
 
-What happened, why it happened, and whether the action was authorized.
-
-# 💳 Razorpay Test Mode Integration
+### 💳 Razorpay Test Mode Integration
 
 The project integrates with Razorpay Test Mode for payment processing.
 
-Features
-Payment order creation
-Razorpay Checkout
-Cryptographic signature verification
-Duplicate payment protection
-Idempotency checks
-Cart preservation on failure
-Order recording
-PDF receipt generation
+**Features:**
+- Payment order creation
+- Razorpay Checkout
+- Cryptographic signature verification
+- Duplicate payment protection
+- Idempotency checks
+- Cart preservation on failure
+- Order recording
+- PDF receipt generation
 
-⚠️ This project uses Razorpay Test Mode and is intended for demonstration purposes.
+> ⚠️ **Note:** This project uses Razorpay Test Mode and is intended for demonstration purposes.
 
-⚠️ Failure Handling
+---
 
-Agentic systems must handle failures safely.
+### ⚠️ Failure Handling
 
-Copper & Char includes multiple failure-handling mechanisms.
+Agentic systems must handle failures safely. Copper & Char includes multiple failure-handling mechanisms.
 
-# 🤖 AI Service Failure
-
+#### 🤖 AI Service Failure
 If the AI service returns malformed or invalid output:
-
+```text
 AI Service Failure
         ↓
 Deterministic Fallback Engine
@@ -227,197 +206,173 @@ Deterministic Fallback Engine
 Rule-Based Product Matching
         ↓
 Continue Safely
-
+```
 The system can continue functioning using deterministic recommendation logic.
 
-# 💳 Payment Failure
-
+#### 💳 Payment Failure
 If a payment fails:
+- Cart state is preserved
+- No incorrect order is created
+- The user can retry payment
+- The failure is logged
 
-Cart state is preserved
-No incorrect order is created
-The user can retry payment
-The failure is logged
-🛡️ Mandate Violation
+#### 🛡️ Mandate Violation
+If the AI Buyer attempts an unauthorized purchase, the system rejects it (`MANDATE_REJECTED`) and explains why the action was blocked.
 
-If the AI Buyer attempts an unauthorized purchase:
-
-MANDATE_REJECTED
-
-The system explains why the action was blocked.
-
-Example
-Daily spending limit exceeded.
-
-Already spent: ₹6,995
-Requested purchase: ₹1,698
-Daily limit: ₹5,000
+**Example:**
+> *Daily spending limit exceeded.*
+> Already spent: ₹6,995
+> Requested purchase: ₹1,698
+> Daily limit: ₹5,000
 
 In this case:
+- ❌ Payment is not initiated
+- ❌ Unauthorized purchase is blocked
+- 📜 The decision is logged
+- 🧠 The reason is explained
 
-❌ Payment is not initiated
-❌ Unauthorized purchase is blocked
-📜 The decision is logged
-🧠 The reason is explained
-🏗️ Architecture
+---
+
+## 🏗️ Architecture
+
+```text
                          ┌─────────────────────┐
                          │      Frontend       │
-                         │   React + Vite      │
+                         │    React + Vite     │
                          └──────────┬──────────┘
                                     │
                                     │ REST API
                                     ▼
-                    ┌──────────────────────────────┐
-                    │       FastAPI Backend        │
-                    │                              │
-                    │  ┌────────────────────────┐  │
-                    │  │    Growth Agent        │  │
-                    │  └────────────────────────┘  │
-                    │                              │
-                    │  ┌────────────────────────┐  │
-                    │  │      AI Buyer          │  │
-                    │  └────────────────────────┘  │
-                    │                              │
-                    │  ┌────────────────────────┐  │
-                    │  │ Policy & Guardrails    │  │
-                    │  └────────────────────────┘  │
-                    └──────────────┬───────────────┘
-                                   │
-              ┌────────────────────┼────────────────────┐
-              ▼                    ▼                    ▼
-       ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-       │   Database   │    │     Groq     │    │   Razorpay   │
-       │   SQLite     │    │     LLM      │    │  Test Mode   │
-       └──────────────┘    └──────────────┘    └──────────────┘
-# 🛠️ Tech Stack
-Frontend
-React
-Vite
-JavaScript
-REST APIs
-Backend
-Python
-FastAPI
-Uvicorn
-AI
-Groq API
-LLM-powered recommendations
-Deterministic fallback engine
-Payments
-Razorpay Test Mode
-Database
-SQLite
-Other Tools
-ReportLab for PDF receipts
-Environment variables using .env
-Server-side policy validation
-# 📂 Project Structure
+                ┌──────────────────────────────┐
+                │        FastAPI Backend       │
+                │                              │
+                │  ┌────────────────────────┐  │
+                │  │    Growth Agent        │  │
+                │  └────────────────────────┘  │
+                │                              │
+                │  ┌────────────────────────┐  │
+                │  │      AI Buyer          │  │
+                │  └────────────────────────┘  │
+                │                              │
+                │  ┌────────────────────────┐  │
+                │  │ Policy & Guardrails    │  │
+                │  └────────────────────────┘  │
+                └──────────────┬───────────────┘
+                               │
+          ┌────────────────────┼────────────────────┐
+          ▼                    ▼                    ▼
+   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+   │   Database   │    │      Groq    │    │   Razorpay   │
+   │   SQLite     │    │      LLM     │    │  Test Mode   │
+   └──────────────┘    └──────────────┘    └──────────────┘
+```
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend:** React, Vite, JavaScript, REST APIs
+- **Backend:** Python, FastAPI, Uvicorn
+- **AI:** Groq API, LLM-powered recommendations, Deterministic fallback engine
+- **Payments:** Razorpay Test Mode
+- **Database:** SQLite
+- **Other Tools:** ReportLab for PDF receipts, `.env` for environment variables, Server-side policy validation
+
+---
+
+## 📂 Project Structure
+
+```text
 razorpay-agentic-upsell/
 │
 ├── backend/
-│   │
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── services/
 │   │   ├── models/
 │   │   └── ...
-│   │
 │   ├── requirements.txt
 │   ├── .env
 │   └── ...
 │
 ├── frontend/
-│   │
 │   ├── src/
 │   │   ├── components/
 │   │   ├── pages/
 │   │   ├── api/
 │   │   └── ...
-│   │
 │   ├── package.json
 │   └── vite.config.js
 │
 └── README.md
-🚀 Getting Started
-Prerequisites
+```
 
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
 Make sure you have installed:
+- Python 3.10+
+- Node.js 18+
+- npm
+- Git
 
-Python 3.10+
-Node.js 18+
-npm
-Git
-# ⚙️ Backend Setup
+### ⚙️ Backend Setup
 
-Navigate to the backend directory:
+1. **Navigate to the backend directory:**
+   ```bash
+   cd backend
+   ```
+2. **Create a virtual environment:**
+   ```bash
+   python -m venv .venv
+   ```
+3. **Activate the Environment:**
+   - *Windows PowerShell:* `.\.venv\Scripts\Activate.ps1`
+   - *macOS/Linux:* `source .venv/bin/activate`
+4. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+5. **🔐 Environment Variables:**
+   Create a `.env` file inside the backend directory:
+   ```ini
+   RAZORPAY_KEY_ID=rzp_test_xxxxxxxxx
+   RAZORPAY_KEY_SECRET=your_secret
+   GROQ_API_KEY=gsk_xxxxxxxxx
+   ```
+   > ⚠️ **Never commit your `.env` file or API keys to GitHub.** Add them to `.gitignore`.
 
-cd backend
+6. **▶️ Run the Backend:**
+   ```bash
+   uvicorn app.main:app --reload --port 8000
+   ```
+   The backend will run at: `http://127.0.0.1:8000`
+   FastAPI documentation: `http://127.0.0.1:8000/docs`
 
-Create a virtual environment:
+### 🎨 Frontend Setup
 
-python -m venv .venv
-Activate the Environment
-Windows PowerShell
-.\.venv\Scripts\Activate.ps1
+1. **Open another terminal and navigate to:**
+   ```bash
+   cd frontend
+   ```
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+3. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
+   The frontend will typically run at: `http://localhost:5173`
 
-# Install dependencies:
+---
 
-pip install -r requirements.txt
-🔐 Environment Variables
+## 🔄 Application Flow
 
-Create a .env file inside the backend directory.
-
-Example:
-
-RAZORPAY_KEY_ID=rzp_test_xxxxxxxxx
-RAZORPAY_KEY_SECRET=your_secret
-
-GROQ_API_KEY=gsk_xxxxxxxxx
-
-⚠️ Never commit your .env file or API keys to GitHub.
-
-Add the following to .gitignore:
-
-.env
-.venv/
-__pycache__/
-node_modules/
-▶️ Run the Backend
-
-From the backend directory:
-
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
-
-Or, if your virtual environment is activated:
-
-uvicorn app.main:app --reload --port 8000
-
-The backend will run at:
-
-http://127.0.0.1:8000
-
-FastAPI documentation:
-
-http://127.0.0.1:8000/docs
-🎨 Frontend Setup
-
-Open another terminal and navigate to:
-
-cd frontend
-
-Install dependencies:
-
-npm install
-
-Start the development server:
-
-npm run dev
-
-The frontend will typically run at:
-
-http://localhost:5173
-🔄 Application Flow
-📈 Merchant Growth Flow
+### 📈 Merchant Growth Flow
+```text
 Customer Cart
       ↓
 Growth Agent Analyzes Cart
@@ -429,11 +384,14 @@ Server-Side Policy Validation
 Approval Required?
       ↓
 YES ──────────────→ Approval Queue
-                        ↓
-                  Merchant Decision
-                        ↓
-                    Execute Action
-🤖 AI Buyer Flow
+                    ↓
+              Merchant Decision
+                    ↓
+              Execute Action
+```
+
+### 🤖 AI Buyer Flow
+```text
 Natural Language Request
         ↓
 Intent Extraction
@@ -449,173 +407,120 @@ Bundle Construction
 Final Mandate Validation
         ↓
 Authorized?
-     ↙          ↘
-   YES           NO
-    ↓             ↓
-Checkout      MANDATE_REJECTED
-# 🛡️ Policy Guardrails
+     ↙      ↘
+   YES        NO
+    ↓         ↓
+Checkout   MANDATE_REJECTED
+```
+
+---
+
+## 🛡️ Policy Guardrails
 
 The platform uses server-side guardrails to restrict AI actions.
 
-Example:
-
+**Example Policy:**
+```json
 {
   "auto_approval_threshold": 2000,
   "max_discount_pct": 15,
   "max_ai_addons": 3,
   "max_cart_increase_pct": 30
 }
+```
+These policies are enforced independently of the AI model. For example, if the AI proposes a 50% discount, the backend can reject or clamp the value according to the configured policy.
 
-These policies are enforced independently of the AI model.
+---
 
-For example, if the AI proposes:
+## 🧪 Example AI Buyer Request
 
-Discount: 50%
+**User Request:**
+> *Buy me a useful kitchen accessory under ₹2,000*
 
-The backend can reject or clamp the value according to the configured policy.
+**AI Execution Trace:**
+- ✓ Loading buyer mandate
+- ✓ Filtering catalog against mandate
+- ✓ Understanding requirements
+- ✓ Product identification
+- ✓ Constructing authorized bundle
+- ✓ Budget validation
+- ✓ Buyer mandate validation
+- ✓ Policy validation
 
-# 🧪 Example AI Buyer Request
-User Request
-Buy me a useful kitchen accessory under ₹2,000
-AI Execution Trace
-✓ Loading buyer mandate
-✓ Filtering catalog against mandate
-✓ Understanding requirements
-✓ Product identification
-✓ Constructing authorized bundle
-✓ Budget validation
-✓ Buyer mandate validation
-✓ Policy validation
+**The system returns:** Product recommendations, Prices, Reasons for recommendations, Budget impact, Decision traces, and Authorization status.
 
-The system returns:
+---
 
-Product recommendations
-Prices
-Reasons for recommendations
-Budget impact
-Decision traces
-Authorization status
-🏆 Hackathon Track Alignment
-Track
+## 🏆 Hackathon Track Alignment
 
-AI Growth & Agentic Commerce
+**Track:** AI Growth & Agentic Commerce
 
-Copper & Char addresses both sides of agentic commerce.
+Copper & Char addresses both sides of agentic commerce:
 
-📈 Grow the Merchant
+1. **📈 Grow the Merchant**
+   The Merchant Growth Agent helps increase revenue through upselling, cross-selling, intelligent recommendations, and cart-aware product suggestions.
+2. **🤖 Make Merchants Transactable by AI Buyers**
+   The AI Buyer enables natural-language product discovery, agent-driven purchasing decisions, buyer mandates, spending boundaries, category restrictions, and explainable authorization.
 
-The Merchant Growth Agent helps increase revenue through:
+### 🧠 Key Innovation
+The key innovation of Copper & Char is not simply using an LLM. It combines:
+- **🤖 AI Intelligence:** Agents can understand requests, analyze shopping carts, recommend products, and identify revenue opportunities.
+- **🛡️ Deterministic Governance:** The backend independently validates spending limits, product prices, product categories, discounts, cart limits, and approval requirements.
+- **📜 Explainability:** Every important decision can be traced and explained.
+- **⚡ Reliability:** The system includes deterministic fallback logic when the AI service is unavailable.
 
-Upselling
-Cross-selling
-Intelligent recommendations
-Cart-aware product suggestions
-🤖 Make Merchants Transactable by AI Buyers
+---
 
-The AI Buyer enables:
-
-Natural-language product discovery
-Agent-driven purchasing decisions
-Buyer mandates
-Spending boundaries
-Category restrictions
-Explainable authorization
-🧠 Key Innovation
-
-The key innovation of Copper & Char is not simply using an LLM.
-
-It combines:
-
-🤖 AI Intelligence
-
-Agents can:
-
-Understand requests
-Analyze shopping carts
-Recommend products
-Identify revenue opportunities
-# 🛡️ Deterministic Governance
-
-The backend independently validates:
-
-Spending limits
-Product prices
-Product categories
-Discounts
-Cart limits
-Approval requirements
-📜 Explainability
-
-Every important decision can be traced and explained.
-
-⚡ Reliability
-
-The system includes deterministic fallback logic when the AI service is unavailable.
-
-# 🎯 Design Principles
+## 🎯 Design Principles
 
 Copper & Char is built around five principles:
+1. **Explainable:** Every important decision includes reasoning and execution traces.
+2. **Bounded:** AI actions operate within predefined limits.
+3. **Validated:** The backend independently validates financial actions.
+4. **Gated:** Sensitive actions require approval when necessary.
+5. **Audited:** Important actions are recorded for transparency.
 
-1. Explainable
+---
 
-Every important decision includes reasoning and execution traces.
-
-2. Bounded
-
-AI actions operate within predefined limits.
-
-3. Validated
-
-The backend independently validates financial actions.
-
-4. Gated
-
-Sensitive actions require approval when necessary.
-
-5. Audited
-
-Important actions are recorded for transparency.
-
-# ⚠️ Current Limitations
+## ⚠️ Current Limitations
 
 This project is currently a prototype and demonstration.
+- Razorpay operates in Test Mode.
+- Buyer mandates are system-defined for the demo.
+- Fully autonomous payment without checkout interaction is not claimed.
+- SQLite is used for the prototype environment.
+- Production email notifications are not implemented.
 
-Razorpay operates in Test Mode
-Buyer mandates are system-defined for the demo
-Fully autonomous payment without checkout interaction is not claimed
-SQLite is used for the prototype environment
-Production email notifications are not implemented
-🔮 Future Improvements
+---
 
-Potential future improvements include:
+## 🔮 Future Improvements
 
-User-configurable buyer mandates
-Advanced conversational checkout
-PostgreSQL production database
-Production notification services
-Multi-agent negotiation
-Advanced merchant analytics
-Agent-to-agent commerce protocols
-Production authentication
-Mobile application support
-👩‍💻 Author
+- User-configurable buyer mandates
+- Advanced conversational checkout
+- PostgreSQL production database
+- Production notification services
+- Multi-agent negotiation
+- Advanced merchant analytics
+- Agent-to-agent commerce protocols
+- Production authentication
+- Mobile application support
 
-Shivanshee Sahu
+---
 
-Built for the AI Growth & Agentic Commerce track.
+## 👩‍💻 Author
+**Shivanshee Sahu**
+*Built for the AI Growth & Agentic Commerce track.*
 
-🏁 Final Statement
+---
 
-The future of AI commerce should not be an unrestricted AI with access to money.
+## 🏁 Final Statement
 
-Instead:
+The future of AI commerce should not be an unrestricted AI with access to money. Instead:
+- *AI can reason.*
+- *Policies define boundaries.*
+- *Humans control sensitive actions.*
+- *Systems validate transactions.*
+- *Every decision remains explainable.*
 
-AI can reason.
-Policies define boundaries.
-Humans control sensitive actions.
-Systems validate transactions.
-Every decision remains explainable.
-
-🤖🛡️ Copper & Char
-
-Intelligent Commerce. Governed Actions. Explainable Decisions.
+**🤖🛡️ Copper & Char**
+*Intelligent Commerce. Governed Actions. Explainable Decisions.*
